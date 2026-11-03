@@ -13,6 +13,7 @@
     "db:migrate": "prisma migrate deploy",
     "db:migrate:dev": "prisma migrate dev",
     "db:status": "prisma migrate status",
+    "db:seed:superadmin": "node --env-file-if-exists=.env --import ./scripts/ts-register.mjs scripts/seed-superadmin.ts",
     "db:studio": "prisma studio"
   },
   "dependencies": {
@@ -21,6 +22,7 @@
     "exceljs": "4.4.0",
     "next": "16.4.3",
     "pdfkit": "0.20.2",
+    "qrcode-generator": "2.0.4",
     "react": "19.3.0",
     "react-dom": "19.3.0",
     "zod": "4.6.6"

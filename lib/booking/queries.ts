@@ -1,36 +1,67 @@
+import { roomScopeWhere } from '@/lib/auth/scope';
+import type { RoomScope } from '@/lib/auth/types';
 import type { Prisma } from '@/lib/generated/prisma/client';
 import { prisma } from '@/lib/prisma';
+import { lockRooms, type LockedRoom } from '@/lib/room/lock';
 
 import { ATTENDANCE_CLOSE_AFTER_MS, ATTENDANCE_OPEN_BEFORE_MS } from './attendance-window';
 import { LOG_MAX_ATTENDEES, LOG_MAX_ROWS, type ExportAttendee } from './log';
-import { startOfTodayJakarta } from './time';
-import type { LogBooking, UpcomingBooking } from './types';
+import { sortByStatus, startOfTodayJakarta } from './time';
+import type { Gender, LogBooking, UpcomingBooking } from './types';
+
+// Public room loaders live in lib/room/queries.ts; re-exported for pages.
+export { findPublicRoomById, getActiveRooms } from '@/lib/room/queries';
 
 const UPCOMING_LIMIT = 100;
-// Overlapping attendance windows are rare; a few candidates are enough to pick one.
+// Overlapping attendance windows in one room are rare; a few candidates are enough to pick one.
 const ATTENDANCE_CANDIDATES_LIMIT = 5;
+
+const ROOM_SELECT = { select: { id: true, name: true } } as const;
 
 const BOOKING_SELECT = {
   id: true,
   startsAt: true,
   endsAt: true,
   bookerName: true,
-  division: true,
+  satker: true,
   agenda: true,
+  roomId: true,
+  room: ROOM_SELECT,
 } as const;
 
+// Public pages pass `roomId`; dashboard must pass `scope` (+ optional `roomId`, intersected with the scope).
+export type BookingRoomFilter = { roomId: string; scope?: never } | { scope: RoomScope; roomId?: string };
+
+function roomFilterWhere(filter: BookingRoomFilter): Prisma.BookingWhereInput {
+  const parts: Prisma.BookingWhereInput[] = [];
+  if (filter.scope) parts.push(roomScopeWhere(filter.scope));
+  if (filter.roomId) parts.push({ roomId: filter.roomId });
+  return { AND: parts };
+}
+
 // Today's bookings (WIB) stay visible all day, even after they end.
-export async function getUpcomingBookings(now: Date): Promise<UpcomingBooking[]> {
-  return prisma.booking.findMany({
-    where: { endsAt: { gt: startOfTodayJakarta(now) } },
+// Ordered ongoing, then upcoming, then finished (see sortByStatus).
+export async function getUpcomingBookings(now: Date, filter: BookingRoomFilter): Promise<UpcomingBooking[]> {
+  const rows = await prisma.booking.findMany({
+    where: { endsAt: { gt: startOfTodayJakarta(now) }, ...roomFilterWhere(filter) },
     orderBy: { startsAt: 'asc' },
     take: UPCOMING_LIMIT,
     select: BOOKING_SELECT,
   });
+  return sortByStatus(rows, now);
 }
 
-export async function findBookingById(id: string): Promise<UpcomingBooking | null> {
-  return prisma.booking.findUnique({ where: { id }, select: BOOKING_SELECT });
+// Bookings starting today (WIB), for the dashboard summary. Same status order as getUpcomingBookings.
+export async function getTodayBookings(now: Date, filter: BookingRoomFilter): Promise<UpcomingBooking[]> {
+  const today = startOfTodayJakarta(now);
+  const tomorrow = new Date(today.getTime() + 86_400_000); // WIB has no DST
+  const rows = await prisma.booking.findMany({
+    where: { startsAt: { gte: today, lt: tomorrow }, ...roomFilterWhere(filter) },
+    orderBy: { startsAt: 'asc' },
+    take: UPCOMING_LIMIT,
+    select: BOOKING_SELECT,
+  });
+  return sortByStatus(rows, now);
 }
 
 // Escape LIKE wildcards; Prisma `contains` passes them through unescaped.
@@ -41,13 +72,15 @@ function escapeLike(value: string): string {
 export type LogBookingsResult = { rows: LogBooking[]; truncated: boolean };
 
 type LogRange = { gte: Date; lt: Date };
-type LogFilter = { division?: string; bookerName?: string };
+// `scope` is required: the log is dashboard-only.
+export type LogFilter = { satker?: string; bookerName?: string; roomId?: string; scope: RoomScope };
 
 // Shared by the log bookings and attendee queries so both see the same set.
 function logWhere(range: LogRange, filter: LogFilter): Prisma.BookingWhereInput {
   return {
     startsAt: { gte: range.gte, lt: range.lt },
-    ...(filter.division ? { division: filter.division } : {}),
+    ...roomFilterWhere(filter),
+    ...(filter.satker ? { satker: filter.satker } : {}),
     ...(filter.bookerName
       ? { bookerName: { contains: escapeLike(filter.bookerName) } } // _ci collation: case-insensitive
       : {}),
@@ -56,10 +89,7 @@ function logWhere(range: LogRange, filter: LogFilter): Prisma.BookingWhereInput 
 
 // Reservation log: bookings starting in [gte, lt), optionally filtered.
 // Fetches one extra row to detect when LOG_MAX_ROWS is exceeded.
-export async function getLogBookings(
-  range: LogRange,
-  filter: LogFilter,
-): Promise<LogBookingsResult> {
+export async function getLogBookings(range: LogRange, filter: LogFilter): Promise<LogBookingsResult> {
   if (range.gte >= range.lt) return { rows: [], truncated: false };
   const found = await prisma.booking.findMany({
     where: logWhere(range, filter),
@@ -82,7 +112,7 @@ export async function getLogAttendees(
     where: { booking: logWhere(range, filter) },
     orderBy: [{ signedAt: 'asc' }, { id: 'asc' }],
     take: LOG_MAX_ATTENDEES + 1,
-    select: { bookingId: true, name: true, division: true, role: true, signedAt: true },
+    select: { bookingId: true, name: true, satker: true, gender: true, role: true, signedAt: true },
   });
   const truncated = rows.length > LOG_MAX_ATTENDEES;
   return { rows: truncated ? rows.slice(0, LOG_MAX_ATTENDEES) : rows, truncated };
@@ -91,32 +121,33 @@ export async function getLogAttendees(
 const ATTENDEE_SELECT = {
   id: true,
   name: true,
-  division: true,
+  satker: true,
+  gender: true,
   role: true,
   phone: true,
   signedAt: true,
 } as const;
 
-// `phone` is admin-only: map it to null before passing rows to non-admin views.
+// `phone` is dashboard-only: map it to null before passing rows to public views (H5).
 export type AttendeeRow = {
   id: string;
   name: string;
-  division: string;
+  satker: string;
+  gender: Gender | null;
   role: string | null;
   phone: string | null;
   signedAt: Date;
 };
 
-// One booking with its attendees in signing order; null when missing.
+// One booking with its attendees in signing order; null when missing. Dashboard callers authorize first.
 export async function getBookingAttendance(id: string): Promise<{
-  booking: UpcomingBooking & { attendanceToken: string | null };
+  booking: UpcomingBooking;
   attendees: AttendeeRow[];
 } | null> {
   const found = await prisma.booking.findUnique({
     where: { id },
     select: {
       ...BOOKING_SELECT,
-      attendanceToken: true,
       attendances: { orderBy: { signedAt: 'asc' }, select: ATTENDEE_SELECT },
     },
   });
@@ -125,33 +156,27 @@ export async function getBookingAttendance(id: string): Promise<{
   return { booking, attendees: attendances };
 }
 
-export type AttendanceCandidate = {
-  id: string;
-  startsAt: Date;
-  endsAt: Date;
-  agenda: string;
-  attendanceToken: string | null;
-};
+export type RoomAttendanceCandidate = { id: string; startsAt: Date; endsAt: Date; agenda: string };
 
-// Bookings whose attendance window contains `now`; pick one with pickActiveMeeting.
-export async function findAttendanceCandidates(now: Date): Promise<AttendanceCandidate[]> {
+// One room's bookings whose attendance window contains `now` (overlap per room keeps this to ~1).
+export async function findOpenBookingsInRoom(roomId: string, now: Date): Promise<RoomAttendanceCandidate[]> {
   return prisma.booking.findMany({
     where: {
+      roomId,
       startsAt: { lte: new Date(now.getTime() + ATTENDANCE_OPEN_BEFORE_MS) },
       endsAt: { gte: new Date(now.getTime() - ATTENDANCE_CLOSE_AFTER_MS) },
     },
     orderBy: { startsAt: 'asc' },
     take: ATTENDANCE_CANDIDATES_LIMIT,
-    select: { id: true, startsAt: true, endsAt: true, agenda: true, attendanceToken: true },
+    select: { id: true, startsAt: true, endsAt: true, agenda: true },
   });
 }
 
-// Minimal select: callers must not leak booking details publicly.
-export async function findBookingByToken(
-  token: string,
-): Promise<{ id: string; startsAt: Date; endsAt: Date; agenda: string } | null> {
-  return prisma.booking.findUnique({
-    where: { attendanceToken: token },
+// Next booking in a room that has not started yet.
+export async function findNextBookingInRoom(roomId: string, now: Date): Promise<RoomAttendanceCandidate | null> {
+  return prisma.booking.findFirst({
+    where: { roomId, startsAt: { gt: now } },
+    orderBy: { startsAt: 'asc' },
     select: { id: true, startsAt: true, endsAt: true, agenda: true },
   });
 }
@@ -159,12 +184,12 @@ export async function findBookingByToken(
 const RECENT_PAST_DAYS = 30;
 const RECENT_PAST_LIMIT = 100;
 
-// Bookings that started in the last 30 WIB days, before today (home covers today); newest first.
-export async function getRecentPastBookings(now: Date): Promise<LogBooking[]> {
+// One room's bookings that started in the last 30 WIB days, before today; newest first (C2).
+export async function getRecentPastBookings(now: Date, roomId: string): Promise<LogBooking[]> {
   const today = startOfTodayJakarta(now);
   const from = new Date(today.getTime() - RECENT_PAST_DAYS * 86_400_000); // WIB has no DST
   const found = await prisma.booking.findMany({
-    where: { startsAt: { gte: from, lt: today } },
+    where: { roomId, startsAt: { gte: from, lt: today } },
     orderBy: { startsAt: 'desc' },
     take: RECENT_PAST_LIMIT,
     select: { ...BOOKING_SELECT, _count: { select: { attendances: true } } },
@@ -179,25 +204,29 @@ function toCountedBooking({
   return { ...booking, attendeeCount: _count.attendances };
 }
 
-const DIVISIONS_LIMIT = 200;
+const SATKER_LIMIT = 200;
 
-// Divisions used in [gte, lt); range hits the starts_at index, capped.
-export async function getDistinctDivisions(range: { gte: Date; lt: Date }): Promise<string[]> {
+// Satker values used in [gte, lt) within the scope; range hits the starts_at index, capped.
+export async function getDistinctSatker(
+  range: { gte: Date; lt: Date },
+  filter: { roomId?: string; scope: RoomScope },
+): Promise<string[]> {
   const rows = await prisma.booking.findMany({
-    where: { startsAt: { gte: range.gte, lt: range.lt }, division: { not: '' } },
-    distinct: ['division'],
-    orderBy: { division: 'asc' },
-    take: DIVISIONS_LIMIT,
-    select: { division: true },
+    where: { startsAt: { gte: range.gte, lt: range.lt }, satker: { not: '' }, ...roomFilterWhere(filter) },
+    distinct: ['satker'],
+    orderBy: { satker: 'asc' },
+    take: SATKER_LIMIT,
+    select: { satker: true },
   });
-  return rows.map((r) => r.division);
+  return rows.map((r) => r.satker);
 }
 
 export type OverlappingSlot = { startsAt: Date; endsAt: Date };
 
-// Half-open overlap; run under lockBookingWrites to be race-free (ADR 0001).
+// Half-open overlap within one room; run under lockRoomForWrite to be race-free (ADR 0003).
 // `excludeId` skips the booking being edited.
 export async function findOverlap(
+  roomId: string,
   startsAt: Date,
   endsAt: Date,
   excludeId?: string,
@@ -205,6 +234,7 @@ export async function findOverlap(
 ): Promise<OverlappingSlot | null> {
   return db.booking.findFirst({
     where: {
+      roomId,
       startsAt: { lt: endsAt },
       endsAt: { gt: startsAt },
       ...(excludeId ? { id: { not: excludeId } } : {}),
@@ -214,10 +244,11 @@ export async function findOverlap(
   });
 }
 
-// Serializes time-changing booking writes until the tx ends. Fails closed if the lock row is missing.
-export async function lockBookingWrites(tx: Prisma.TransactionClient): Promise<void> {
-  // Same tx connection; lock wait gives up before Prisma's 10s tx timeout.
-  await tx.$executeRaw`SET SESSION innodb_lock_wait_timeout = 5`;
-  const rows = await tx.$queryRaw<{ id: number }[]>`SELECT id FROM booking_locks WHERE id = 1 FOR UPDATE`;
-  if (rows.length !== 1) throw new Error('booking_locks row 1 is missing');
+// Serializes time-changing writes per room (ADR 0003, replaces lockBookingWrites); also reads is_active atomically.
+export async function lockRoomForWrite(
+  tx: Prisma.TransactionClient,
+  roomIds: readonly string[],
+): Promise<Map<string, LockedRoom>> {
+  const rows = await lockRooms(tx, roomIds);
+  return new Map(rows.map((r) => [r.id, r]));
 }

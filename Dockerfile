@@ -21,6 +21,9 @@ WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 COPY --from=deps /app/lib/generated ./lib/generated
+# NEXT_PUBLIC_* is inlined into the bundle at build time.
+ARG NEXT_PUBLIC_APP_MAINTAINER=
+ENV NEXT_PUBLIC_APP_MAINTAINER=$NEXT_PUBLIC_APP_MAINTAINER
 RUN npm run build
 
 # Prisma CLI only: version and transitive deps come from the app's package.json + lockfile.

@@ -1,38 +1,33 @@
 'use server';
 
 import { refresh } from 'next/cache';
-import { headers } from 'next/headers';
 
 import { prisma } from '@/lib/prisma';
-import { isAdmin } from '@/lib/auth/session';
-import { findBookingById } from '@/lib/booking/queries';
+import { authorizeBooking, authorizeSuperadmin, authorizeUser } from '@/lib/auth/access';
 import { getBookingStatus } from '@/lib/booking/time';
 import { RESET_CONFIRMATION, type BookingFormState } from '@/lib/booking/types';
-import { isBookingId, parseBookingText, readBookingTextValues } from '@/lib/booking/validation';
-import { checkOfficeAccess } from '@/lib/office-access';
+import { parseBookingText, readBookingTextValues } from '@/lib/booking/validation';
 
 export type LogActionResult = { ok: boolean; message?: string; count?: number };
 
 // `id` comes from the client: treat it as unknown at runtime.
 export async function deletePastBooking(id: string): Promise<LogActionResult> {
-  if (!checkOfficeAccess(await headers()).allowed) return { ok: false, message: 'Tidak diizinkan.' };
   // Authorization is enforced here; hiding the button is UX only.
-  if (!(await isAdmin())) return { ok: false, message: 'Tidak diizinkan.' };
-  if (!isBookingId(id)) return { ok: false, message: 'Booking tidak valid.' };
+  const user = await authorizeUser();
+  if (!user) return { ok: false, message: 'Tidak diizinkan.' };
 
   try {
-    const existing = await findBookingById(id);
-    // Idempotent: an already-removed booking still succeeds; refresh drops the stale row.
-    if (!existing) {
-      refresh();
-      return { ok: true };
-    }
+    // Missing and out-of-scope look the same (G4).
+    const existing = await authorizeBooking(user, id);
+    if (!existing) return { ok: false, message: 'Tidak diizinkan.' };
     const now = new Date();
     if (getBookingStatus(existing.startsAt, existing.endsAt, now) !== 'done') {
       return { ok: false, message: 'Hanya booking yang sudah selesai yang bisa dihapus dari log.' };
     }
     // Re-check endsAt in the delete itself so a concurrent edit can't slip an active booking through.
-    const { count } = await prisma.booking.deleteMany({ where: { id, endsAt: { lte: now } } });
+    const { count } = await prisma.booking.deleteMany({
+      where: { id: existing.id, roomId: existing.roomId, endsAt: { lte: now } },
+    });
     if (count === 0) {
       refresh();
       return { ok: false, message: 'Hanya booking yang sudah selesai yang bisa dihapus dari log.' };
@@ -55,18 +50,17 @@ export async function updatePastBookingText(
   const values = readBookingTextValues(formData);
   const fail = (message: string): BookingFormState => ({ status: 'error', message, values });
 
-  if (!checkOfficeAccess(await headers()).allowed) return fail('Tidak diizinkan.');
-  if (!(await isAdmin())) return fail('Tidak diizinkan.');
-  if (!isBookingId(id)) return fail('Booking tidak valid.');
+  const user = await authorizeUser();
+  if (!user) return fail('Tidak diizinkan.');
 
   let existing;
   try {
-    existing = await findBookingById(id);
+    existing = await authorizeBooking(user, id);
   } catch (error) {
     console.error('[updatePastBookingText] failed to load booking', error);
     return fail('Booking gagal diperbarui. Silakan coba lagi.');
   }
-  if (!existing) return fail('Booking tidak ditemukan.');
+  if (!existing) return fail('Tidak diizinkan.');
 
   const now = new Date();
   if (getBookingStatus(existing.startsAt, existing.endsAt, now) !== 'done') {
@@ -83,14 +77,14 @@ export async function updatePastBookingText(
     };
   }
 
-  const { bookerName, division, agenda } = parsed.data;
+  const { bookerName, satker, agenda } = parsed.data;
 
   let count: number;
   try {
     // Explicit allowlist (never date/time); endsAt guard blocks a concurrent move into the future.
     ({ count } = await prisma.booking.updateMany({
-      where: { id, endsAt: { lte: now } },
-      data: { bookerName, division, agenda },
+      where: { id: existing.id, roomId: existing.roomId, endsAt: { lte: now } },
+      data: { bookerName, satker, agenda },
     }));
   } catch (error) {
     console.error('[updatePastBookingText] failed to update booking', error);
@@ -103,10 +97,9 @@ export async function updatePastBookingText(
   return { status: 'success', message: 'Booking berhasil diperbarui.' };
 }
 
-// Deletes every booking, upcoming included (intended).
+// Deletes every booking in every room, upcoming included (intended). Superadmin only (H4).
 export async function resetAllBookings(confirmation: string): Promise<LogActionResult> {
-  if (!checkOfficeAccess(await headers()).allowed) return { ok: false, message: 'Tidak diizinkan.' };
-  if (!(await isAdmin())) return { ok: false, message: 'Tidak diizinkan.' };
+  if (!(await authorizeSuperadmin())) return { ok: false, message: 'Tidak diizinkan.' };
   if (confirmation !== RESET_CONFIRMATION) return { ok: false, message: 'Konfirmasi tidak sesuai.' };
 
   let count: number;

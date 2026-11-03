@@ -1,15 +1,19 @@
 'use client';
 
 import { useActionState, useState } from 'react';
+import { useFormStatus } from 'react-dom';
 import { signatureFont } from '@/app/fonts/signature';
 import {
   ATTENDANCE_LIMITS,
   ATTENDEE_ROLES,
   ATTENDEE_ROLE_LABELS,
+  GENDER_LABELS,
+  GENDERS,
   initialAttendanceFormState,
   type AttendanceField,
   type AttendanceFormState,
 } from '@/lib/booking/types';
+import { RecaptchaNotice, useRecaptchaFormAction } from './recaptcha';
 
 // Same look as booking-fields; text-base on mobile stops iOS focus-zoom.
 const inputClass =
@@ -22,11 +26,15 @@ type AttendanceAction = (state: AttendanceFormState, formData: FormData) => Prom
 export function AttendanceForm({
   action,
   variant,
+  recaptchaSiteKey,
 }: {
   action: AttendanceAction;
   variant: 'public' | 'internal';
+  // Public variant only; null/undefined = reCAPTCHA disabled.
+  recaptchaSiteKey?: string | null;
 }) {
-  const [state, formAction, pending] = useActionState(action, initialAttendanceFormState);
+  const [state, dispatch, pending] = useActionState(action, initialAttendanceFormState);
+  const recaptcha = useRecaptchaFormAction(dispatch, variant === 'public' ? recaptchaSiteKey : null, 'attendance');
 
   // Signature preview mirrors the typed name; resynced whenever a new state arrives.
   const [preview, setPreview] = useState('');
@@ -43,6 +51,7 @@ export function AttendanceForm({
 
   const errors = state.fieldErrors ?? {};
   const values = state.values ?? {};
+  const genderError = errors.gender;
 
   const errorId = (name: AttendanceField) => (errors[name] ? `${name}-error` : undefined);
   const fieldProps = (name: AttendanceField) => ({
@@ -54,7 +63,8 @@ export function AttendanceForm({
   });
 
   return (
-    <form action={formAction} className="space-y-5">
+    <form action={recaptcha.formAction} className="space-y-5">
+      {recaptcha.recaptchaScript}
       {state.status !== 'idle' && state.message && (
         <p
           role={state.status === 'error' ? 'alert' : 'status'}
@@ -85,16 +95,43 @@ export function AttendanceForm({
         </p>
       </Field>
 
-      <Field label="Biro/Divisi/Instansi" id="division" error={errors.division}>
+      <Field label="Satker/Instansi" id="satker" error={errors.satker}>
         <input
           type="text"
           required
-          maxLength={ATTENDANCE_LIMITS.division}
+          maxLength={ATTENDANCE_LIMITS.satker}
           autoComplete="organization"
           className={inputClass}
-          {...fieldProps('division')}
+          {...fieldProps('satker')}
         />
       </Field>
+
+      <fieldset aria-describedby={genderError ? 'gender-error' : undefined} className="min-w-0 space-y-1.5">
+        <legend className="text-sm font-medium text-zinc-800">Jenis Kelamin</legend>
+        <div className="grid grid-cols-2 gap-2">
+          {GENDERS.map((g) => (
+            <label
+              key={g}
+              className="flex cursor-pointer items-center gap-2.5 rounded-lg border border-zinc-300 bg-white px-3 py-2.5 text-base text-zinc-900 has-[:checked]:border-primary has-[:checked]:bg-primary/[0.04] has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-primary sm:py-2 sm:text-sm"
+            >
+              <input
+                type="radio"
+                name="gender"
+                value={g}
+                required
+                defaultChecked={values.gender === g}
+                className="size-4 accent-primary"
+              />
+              {GENDER_LABELS[g]}
+            </label>
+          ))}
+        </div>
+        {genderError && (
+          <p id="gender-error" className="text-sm text-red-600">
+            {genderError}
+          </p>
+        )}
+      </fieldset>
 
       <Field label="Sebagai" id="role" error={errors.role}>
         <select required className={inputClass} {...fieldProps('role')} defaultValue={values.role ?? ''}>
@@ -123,15 +160,25 @@ export function AttendanceForm({
 
       <SignaturePreview name={preview} />
 
-      <button
-        type="submit"
-        disabled={pending}
-        aria-disabled={pending}
-        className="inline-flex w-full items-center justify-center rounded-lg bg-primary px-4 py-3 text-base font-semibold text-white shadow-sm hover:bg-primary/90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary disabled:cursor-not-allowed disabled:opacity-60 sm:py-2.5 sm:text-sm motion-safe:transition-colors"
-      >
-        {pending ? 'Menyimpan…' : 'Isi Daftar Hadir'}
-      </button>
+      <SubmitButton pending={pending} />
+      {recaptcha.enabled && <RecaptchaNotice />}
     </form>
+  );
+}
+
+// useFormStatus also covers the reCAPTCHA token fetch before dispatch.
+function SubmitButton({ pending }: { pending: boolean }) {
+  const { pending: formPending } = useFormStatus();
+  const busy = pending || formPending;
+  return (
+    <button
+      type="submit"
+      disabled={busy}
+      aria-disabled={busy}
+      className="inline-flex w-full items-center justify-center rounded-lg bg-primary px-4 py-3 text-base font-semibold text-white shadow-sm hover:bg-primary/90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary disabled:cursor-not-allowed disabled:opacity-60 sm:py-2.5 sm:text-sm motion-safe:transition-colors"
+    >
+      {busy ? 'Menyimpan…' : 'Isi Daftar Hadir'}
+    </button>
   );
 }
 

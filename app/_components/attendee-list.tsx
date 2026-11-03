@@ -1,9 +1,18 @@
 import { signatureFont } from '@/app/fonts/signature';
-import { attendeeRoleLabel, type Attendee } from '@/lib/booking/types';
+import { attendeeRoleLabel, genderLabel, type Attendee } from '@/lib/booking/types';
 import { DeleteAttendeeButton } from './delete-attendee-button';
 
 // Server component; rows arrive sorted by signedAt (query order).
-export function AttendeeList({ attendees, admin }: { attendees: Attendee[]; admin: boolean }) {
+// showPhone/canDelete are dashboard-only; public pages never pass them (H5).
+export function AttendeeList({
+  attendees,
+  showPhone = false,
+  canDelete = false,
+}: {
+  attendees: Attendee[];
+  showPhone?: boolean;
+  canDelete?: boolean;
+}) {
   return (
     <section aria-labelledby="attendees-heading">
       <div className="mb-4 flex items-baseline justify-between gap-3">
@@ -34,22 +43,25 @@ export function AttendeeList({ attendees, admin }: { attendees: Attendee[]; admi
                   <div className="min-w-0">
                     <p className="break-words text-sm font-medium text-zinc-800">{a.name}</p>
                     <p className="mt-0.5 break-words text-sm text-zinc-600">
-                      <span className="sr-only">Biro/Divisi/Instansi: </span>
-                      {a.division}
+                      <span className="sr-only">Satker/Instansi: </span>
+                      {a.satker}
                       <span aria-hidden="true"> · </span>
                       <span className="sr-only">Sebagai: </span>
                       {attendeeRoleLabel(a.role)}
+                      <span aria-hidden="true"> · </span>
+                      <span className="sr-only">Jenis kelamin: </span>
+                      {genderLabel(a.gender)}
                     </p>
-                    {/* Defense in depth: the page also nulls phone for non-admins */}
-                    {admin && a.phone && (
+                    {/* Defense in depth: public pages also null the phone */}
+                    {showPhone && a.phone && (
                       <p className="mt-0.5 text-sm tabular-nums text-zinc-500">
                         <span className="sr-only">No HP: </span>
                         {displayPhone(a.phone)}
                       </p>
                     )}
                   </div>
-                  {/* UX only; the action re-checks admin */}
-                  {admin && <DeleteAttendeeButton id={a.id} label={`Hapus ${a.name} dari daftar hadir`} />}
+                  {/* UX only; the action re-checks access */}
+                  {canDelete && <DeleteAttendeeButton id={a.id} label={`Hapus ${a.name} dari daftar hadir`} />}
                 </div>
                 <div className="mt-3 flex flex-wrap items-end justify-between gap-x-4 gap-y-1">
                   {/* Name rendered as signature on a signature line */}

@@ -26,6 +26,9 @@ services:
     build:
       context: .
       target: runner
+      args:
+        # Read from .env at build time; changing it requires a rebuild.
+        NEXT_PUBLIC_APP_MAINTAINER: ${NEXT_PUBLIC_APP_MAINTAINER:-}
     image: booking-rapat:${APP_TAG:-latest}
     depends_on:
       migrate:

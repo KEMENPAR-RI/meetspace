@@ -1,12 +1,26 @@
-// Self-contained 403 page served by proxy.ts; inline CSS only, no scripts.
-export const FORBIDDEN_HTML: string = `<!doctype html>
+import { APP_MAINTAINER } from './maintainer';
+
+function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+const MAINTAINER = escapeHtml(APP_MAINTAINER);
+
+// Self-contained status pages served by proxy.ts; inline CSS only, no scripts. Arguments are trusted HTML.
+function statusPage(title: string, body: string): string {
+  return `<!doctype html>
 <html lang="id">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex">
 <meta name="color-scheme" content="light dark">
-<title>Akses Ditolak · Booking Rapat</title>
+<title>${title} · Booking Rapat</title>
 <style>
 :root{--bg:#f8fafc;--card:#fff;--fg:#171717;--muted:#52525b;--primary:#132b50;--accent:#e9c06f;--border:#e4e4e7}
 @media (prefers-color-scheme:dark){:root{--bg:#0b1626;--card:#132b50;--fg:#f4f4f5;--muted:#c3cad6;--primary:#e9c06f;--border:#24406b}}
@@ -24,10 +38,25 @@ p{margin:0;color:var(--muted);font-size:.9375rem}
 <body>
 <main>
 <img src="/images/logo.webp" width="56" height="56" alt="">
-<p class="code">403 · Akses ditolak</p>
-<h1>Akses hanya dari jaringan kantor</h1>
-<p>Halaman Booking Rapat hanya dapat dibuka dari jaringan internal kantor.</p>
-<p class="hint">Sambungkan perangkat Anda ke WiFi kantor, lalu muat ulang halaman ini. Jika masih ditolak, hubungi tim APJAR.</p>
+${body}
 </main>
 </body>
 </html>`;
+}
+
+export const FORBIDDEN_HTML: string = statusPage(
+  'Akses Ditolak',
+  `<p class="code">403 · Akses ditolak</p>
+<h1>Akses hanya dari jaringan kantor</h1>
+<p>Halaman Booking Rapat hanya dapat dibuka dari jaringan internal kantor.</p>
+<p class="hint">Sambungkan perangkat Anda ke WiFi kantor, lalu muat ulang halaman ini. Jika masih ditolak, hubungi tim ${MAINTAINER}.</p>`,
+);
+
+// 429 for public GET pages over the per-IP limit.
+export const TOO_MANY_HTML: string = statusPage(
+  'Terlalu Banyak Permintaan',
+  `<p class="code">429 · Terlalu banyak permintaan</p>
+<h1>Terlalu banyak permintaan</h1>
+<p>Perangkat atau jaringan Anda membuka halaman ini terlalu sering.</p>
+<p class="hint">Tunggu beberapa menit, lalu muat ulang halaman ini. Jika masih ditolak, hubungi tim ${MAINTAINER}.</p>`,
+);

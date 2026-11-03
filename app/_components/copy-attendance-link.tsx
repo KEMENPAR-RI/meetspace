@@ -2,10 +2,9 @@
 
 import { useEffect, useRef, useState } from 'react';
 
-// Copies the absolute attendance URL; falls back to a selectable field (no clipboard on plain HTTP).
-export function CopyAttendanceLink({ path }: { path: string }) {
+// Copies the absolute URL (built server-side from APP_URL); falls back to a selectable field.
+export function CopyAttendanceLink({ url }: { url: string | null }) {
   const [status, setStatus] = useState<'idle' | 'copied' | 'manual'>('idle');
-  const [url, setUrl] = useState('');
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -18,11 +17,17 @@ export function CopyAttendanceLink({ path }: { path: string }) {
     if (status === 'manual') inputRef.current?.select();
   }, [status]);
 
+  if (!url) {
+    return (
+      <p role="note" className="text-xs text-amber-800">
+        Link belum tersedia: URL publik aplikasi belum dikonfigurasi.
+      </p>
+    );
+  }
+
   const onClick = async () => {
-    const href = new URL(path, window.location.origin).href;
-    setUrl(href);
     try {
-      await navigator.clipboard.writeText(href);
+      await navigator.clipboard.writeText(url);
       setStatus('copied');
     } catch {
       setStatus('manual');

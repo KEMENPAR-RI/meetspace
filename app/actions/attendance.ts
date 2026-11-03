@@ -4,16 +4,28 @@ import { refresh } from 'next/cache';
 import { headers } from 'next/headers';
 
 import { prisma } from '@/lib/prisma';
-import { isAdmin } from '@/lib/auth/session';
-import { checkOfficeAccess, getClientIpKey } from '@/lib/office-access';
-import { consumePublicAttendanceQuota, isBookingAttendanceFull } from '@/lib/rate-limit';
-import { recordAttendance, type RecordAttendanceResult } from '@/lib/booking/attendance';
-import { isAttendanceToken } from '@/lib/booking/attendance-token';
+import { authorizeAttendance, authorizeBooking, authorizeUser, getCurrentUser } from '@/lib/auth/access';
+import { checkOfficeAccess, getClientIpKey, isOfficeIp } from '@/lib/office-access';
+import { consumePublicMutationQuota, isBookingAttendanceFull, rateLimitMessage } from '@/lib/rate-limit';
+import { RECAPTCHA_FAILED_MESSAGE, verifyRecaptcha } from '@/lib/recaptcha';
+import { getAppSettings } from '@/lib/settings/queries';
+import { recordAttendance, type DeviceLockOption, type RecordAttendanceResult } from '@/lib/booking/attendance';
 import { isAttendanceOpen } from '@/lib/booking/attendance-window';
-import { findBookingById, findBookingByToken } from '@/lib/booking/queries';
-import type { AttendanceFormState, DeleteAttendanceResult } from '@/lib/booking/types';
 import {
-  isBookingId,
+  getDeviceLockRemainingMin,
+  hashDeviceId,
+  newDeviceId,
+  readDeviceKey,
+  setDeviceCookie,
+} from '@/lib/booking/device-lock';
+import { findOpenBookingByStart } from '@/lib/booking/public-attendance';
+import { isUuid } from '@/lib/uuid';
+import {
+  deviceLockedMessage,
+  type AttendanceFormState,
+  type DeleteAttendanceResult,
+} from '@/lib/booking/types';
+import {
   parseAttendanceInput,
   readAttendanceValues,
   type AttendanceValues,
@@ -21,7 +33,9 @@ import {
 
 const CLOSED_MESSAGE = 'Daftar hadir sudah ditutup.';
 const INVALID_LINK_MESSAGE = 'Link daftar hadir tidak valid.';
-const RATE_LIMIT_MESSAGE = 'Terlalu banyak percobaan, coba lagi nanti.';
+const NO_MEETING_MESSAGE = 'Tidak ada rapat yang sedang berlangsung di ruangan ini.';
+const MEETING_CHANGED_MESSAGE = 'Rapat sudah berganti, muat ulang halaman.';
+const SAVE_FAILED_MESSAGE = 'Daftar hadir gagal disimpan. Silakan coba lagi.';
 const SUCCESS_MESSAGE = 'Kehadiran berhasil dicatat.';
 
 // `bookingId` is bound on the client: treat it as unknown at runtime.
@@ -33,13 +47,12 @@ export async function signAttendance(
   const values = readAttendanceValues(formData);
   const fail = (message: string): AttendanceFormState => ({ status: 'error', message, values });
 
-  if (!checkOfficeAccess(await headers()).allowed) return fail('Tidak diizinkan.');
-  // Internal form is admin only; participants use /hadir.
-  if (!(await isAdmin())) return fail('Tidak diizinkan.');
-  if (!isBookingId(bookingId)) return fail('Booking tidak valid.');
+  // Internal form is dashboard only; participants use /hadir.
+  const user = await authorizeUser();
+  if (!user) return fail('Tidak diizinkan.');
 
-  const booking = await findBookingById(bookingId);
-  if (!booking) return fail('Booking tidak ditemukan.');
+  const booking = await authorizeBooking(user, bookingId);
+  if (!booking) return fail('Tidak diizinkan.');
   const now = new Date();
   if (!isAttendanceOpen(booking.startsAt, booking.endsAt, now)) return fail(CLOSED_MESSAGE);
 
@@ -53,39 +66,82 @@ export async function signAttendance(
   return { status: 'success', message: SUCCESS_MESSAGE };
 }
 
-// Public (no office check by design): token-only, rate limited outside the office,
-// never refreshes or returns meeting/attendee data. `token` is bound on the client.
+// Public (no office check by design): per room, never refreshes or returns meeting/attendee data.
+// Bound on the client: `roomId` and `meetingStart` (ISO start of the meeting the form showed). The booking is
+// resolved on the server and must still be that meeting, so back-to-back meetings never swap attendees.
+// FormData `recaptchaToken` (reCAPTCHA v3, action 'attendance') when enabled.
+// No valid session: per-IP limit (office allowlist IPs exempt) + one success per device per cooldown.
 export async function submitPublicAttendance(
-  token: string,
+  roomId: string,
+  meetingStart: string,
   _prevState: AttendanceFormState,
   formData: FormData,
 ): Promise<AttendanceFormState> {
   const values = readAttendanceValues(formData);
   const fail = (message: string): AttendanceFormState => ({ status: 'error', message, values });
 
-  if (!isAttendanceToken(token)) return fail(INVALID_LINK_MESSAGE);
+  const expectedStart = typeof meetingStart === 'string' ? Date.parse(meetingStart) : NaN;
+  if (!isUuid(roomId) || Number.isNaN(expectedStart)) return fail(INVALID_LINK_MESSAGE);
 
   const h = await headers();
   const now = new Date();
-  const office = checkOfficeAccess(h).allowed;
-  if (!office) {
-    const ipKey = getClientIpKey(h);
+  // Server-verified session (admin/superadmin) bypasses the IP and device limits, not reCAPTCHA.
+  const user = await getCurrentUser();
+  const office = (await checkOfficeAccess(h)).allowed;
+  if (!user && !(await isOfficeIp(h))) {
+    const ipKey = await getClientIpKey(h);
     if (!ipKey) return fail('Tidak diizinkan.');
     // Counts every attempt, including ones that fail validation.
-    if (!(await consumePublicAttendanceQuota(ipKey, now))) return fail(RATE_LIMIT_MESSAGE);
+    const quota = await consumePublicMutationQuota(ipKey, now);
+    if (!quota.ok) return fail(rateLimitMessage(quota.retryAfterMin));
   }
 
-  const booking = await findBookingByToken(token);
-  if (!booking) return fail(INVALID_LINK_MESSAGE);
-  if (!isAttendanceOpen(booking.startsAt, booking.endsAt, now)) return fail(CLOSED_MESSAGE);
+  if (!(await verifyRecaptcha(formData.get('recaptchaToken'), 'attendance')).ok) return fail(RECAPTCHA_FAILED_MESSAGE);
+
+  let deviceLock: DeviceLockOption | undefined;
+  let newDeviceRaw: string | null = null;
+  if (!user) {
+    const device = await readDeviceKey();
+    try {
+      const remaining = device.key ? await getDeviceLockRemainingMin(device.key, now) : null;
+      if (remaining !== null) return fail(deviceLockedMessage(remaining));
+      let key = device.key;
+      if (!key) {
+        newDeviceRaw = newDeviceId();
+        key = hashDeviceId(newDeviceRaw);
+      }
+      deviceLock = { key, cooldownMin: (await getAppSettings()).attendanceDeviceCooldownMin };
+    } catch (error) {
+      // Fails closed: the device limit cannot be checked.
+      console.error('[submitPublicAttendance] device lock check failed', error);
+      return fail(SAVE_FAILED_MESSAGE);
+    }
+  }
+
+  const { booking, changed } = await findOpenBookingByStart(roomId.toLowerCase(), expectedStart, now);
+  if (!booking) return fail(changed ? MEETING_CHANGED_MESSAGE : NO_MEETING_MESSAGE);
   if (!office && (await isBookingAttendanceFull(booking.id))) return fail('Daftar hadir sudah penuh.');
 
   const parsed = parseAttendanceInput(formData);
   if (!parsed.ok) return invalidForm(parsed.fieldErrors, parsed.values);
 
-  const result = await recordAttendance(booking, parsed.data, now, { precheck: false });
-  if (!result.ok) return recordFailure(result.reason, values, INVALID_LINK_MESSAGE);
+  const result = await recordAttendance(booking, parsed.data, now, { precheck: false, deviceLock });
+  if (!result.ok) {
+    if (result.reason === 'device-locked' && deviceLock) {
+      // Lost a race with a parallel submit from this device.
+      const remaining = await getDeviceLockRemainingMin(deviceLock.key, now).catch(() => null);
+      return fail(deviceLockedMessage(remaining ?? deviceLock.cooldownMin));
+    }
+    return recordFailure(result.reason, values, NO_MEETING_MESSAGE);
+  }
 
+  if (newDeviceRaw) {
+    try {
+      await setDeviceCookie(newDeviceRaw);
+    } catch (error) {
+      console.error('[submitPublicAttendance] failed to set device cookie', error);
+    }
+  }
   return { status: 'success', message: SUCCESS_MESSAGE };
 }
 
@@ -115,20 +171,21 @@ function recordFailure(
     case 'gone':
       return error(goneMessage);
     default:
-      return error('Daftar hadir gagal disimpan. Silakan coba lagi.');
+      return error(SAVE_FAILED_MESSAGE);
   }
 }
 
 // `id` comes from the client: treat it as unknown at runtime.
 export async function deleteAttendance(id: string): Promise<DeleteAttendanceResult> {
-  if (!checkOfficeAccess(await headers()).allowed) return { ok: false, message: 'Tidak diizinkan.' };
   // Authorization is enforced here; hiding the button is UX only.
-  if (!(await isAdmin())) return { ok: false, message: 'Tidak diizinkan.' };
-  if (!isBookingId(id)) return { ok: false, message: 'Data hadir tidak valid.' };
+  const user = await authorizeUser();
+  if (!user) return { ok: false, message: 'Tidak diizinkan.' };
 
   try {
-    // Idempotent: an already-removed entry still succeeds.
-    await prisma.attendance.deleteMany({ where: { id } });
+    // Missing and out-of-scope look the same (G4).
+    const found = await authorizeAttendance(user, id);
+    if (!found) return { ok: false, message: 'Tidak diizinkan.' };
+    await prisma.attendance.deleteMany({ where: { id: found.id } });
   } catch (error) {
     console.error('[deleteAttendance] failed to delete attendance', error);
     return { ok: false, message: 'Gagal menghapus data hadir.' };

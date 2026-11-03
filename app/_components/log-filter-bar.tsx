@@ -6,7 +6,10 @@ import { useRouter } from 'next/navigation';
 import type { LogFilters } from '@/lib/booking/log';
 import { BOOKING_LIMITS } from '@/lib/booking/types';
 
-type Props = { value: LogFilters; divisions: string[] };
+// rooms: every room in the user's scope (inactive included, for history).
+type Props = { value: LogFilters; satkers: string[]; rooms: { id: string; name: string }[] };
+
+const BASE_PATH = '/dashboard/log';
 
 // Mirrors LOG_YEAR_MIN/MAX; not imported to keep zod out of the client bundle.
 const YEAR_MIN = 2000;
@@ -19,19 +22,18 @@ const inputClass =
 const labelClass = 'block text-xs font-medium text-zinc-700';
 
 // URL is the source of truth; key remounts the form after navigation/reset.
-export function LogFilterBar({ value, divisions }: Props) {
-  return <FilterForm key={JSON.stringify(value)} value={value} divisions={divisions} />;
+export function LogFilterBar(props: Props) {
+  return <FilterForm key={JSON.stringify(props.value)} {...props} />;
 }
 
-function FilterForm({ value, divisions }: Props) {
+function FilterForm({ value, satkers, rooms }: Props) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [year, setYear] = useState(String(value.year));
   const validYear = /^\d{4}$/.test(year) ? year : String(value.year);
-  // Keep a stored division selectable even if it is no longer in the list.
-  const options =
-    value.division && !divisions.includes(value.division) ? [value.division, ...divisions] : divisions;
-  const hasExtra = Boolean(value.division || value.dateStart || value.dateEnd || value.bookerName);
+  // Keep a stored satker selectable even if it is no longer in the list.
+  const options = value.satker && !satkers.includes(value.satker) ? [value.satker, ...satkers] : satkers;
+  const hasExtra = Boolean(value.room || value.satker || value.dateStart || value.dateEnd || value.bookerName);
 
   const onSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -44,19 +46,19 @@ function FilterForm({ value, divisions }: Props) {
     for (const k of ['dateStart', 'dateEnd']) {
       if (!qs.get(k)?.startsWith(`${qs.get('year')}-`)) qs.delete(k);
     }
-    startTransition(() => router.push(`/log?${qs.toString()}`));
+    startTransition(() => router.push(`${BASE_PATH}?${qs.toString()}`));
   };
 
   return (
     <form
-      action="/log"
+      action={BASE_PATH}
       method="get"
       onSubmit={onSubmit}
       aria-label="Filter log reservasi"
       aria-busy={pending || undefined}
       className="rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm sm:p-5"
     >
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-[6rem_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1.3fr)]">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-[6rem_repeat(4,minmax(0,1fr))_minmax(0,1.3fr)]">
         <div className="space-y-1">
           <label htmlFor="log-year" className={labelClass}>
             Tahun
@@ -76,11 +78,25 @@ function FilterForm({ value, divisions }: Props) {
         </div>
 
         <div className="space-y-1">
-          <label htmlFor="log-division" className={labelClass}>
-            Divisi
+          <label htmlFor="log-room" className={labelClass}>
+            Ruangan
           </label>
-          <select id="log-division" name="division" defaultValue={value.division ?? ''} className={inputClass}>
-            <option value="">Semua divisi</option>
+          <select id="log-room" name="room" defaultValue={value.room ?? ''} className={inputClass}>
+            <option value="">Semua ruangan</option>
+            {rooms.map((r) => (
+              <option key={r.id} value={r.id}>
+                {r.name}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div className="space-y-1">
+          <label htmlFor="log-satker" className={labelClass}>
+            Satker/Instansi
+          </label>
+          <select id="log-satker" name="satker" defaultValue={value.satker ?? ''} className={inputClass}>
+            <option value="">Semua satker/instansi</option>
             {options.map((d) => (
               <option key={d} value={d}>
                 {d}
@@ -119,7 +135,7 @@ function FilterForm({ value, divisions }: Props) {
           />
         </div>
 
-        <div className="col-span-2 space-y-1 sm:col-span-4 lg:col-span-1">
+        <div className="space-y-1">
           <label htmlFor="log-booker" className={labelClass}>
             Nama pemesan
           </label>
@@ -140,7 +156,7 @@ function FilterForm({ value, divisions }: Props) {
           <span className="text-xs text-zinc-500 sm:mr-auto">Filter aktif diterapkan ke kalender dan ekspor.</span>
         )}
         <Link
-          href="/log"
+          href={BASE_PATH}
           className="inline-flex items-center justify-center rounded-lg border border-zinc-300 bg-white px-4 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary motion-safe:transition-colors"
         >
           Reset

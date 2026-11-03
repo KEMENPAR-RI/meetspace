@@ -8,13 +8,16 @@ import {
   toJakartaDateString,
   todayInJakarta,
 } from './time';
-import { BOOKING_LIMITS, attendeeRoleLabel, type LogBooking } from './types';
+import { isUuid } from '@/lib/uuid';
+
+import { BOOKING_LIMITS, attendeeRoleLabel, genderCode, type Gender, type LogBooking } from './types';
 
 // Shared contract for the reservation log page, its client components, and the export route.
 
 export type LogFilters = {
   year: number;
-  division?: string;
+  room?: string; // room id; callers must check it against the user's scope
+  satker?: string;
   dateStart?: string; // WIB YYYY-MM-DD
   dateEnd?: string; // WIB YYYY-MM-DD
   bookerName?: string;
@@ -29,14 +32,16 @@ export type LogEntry = {
   startLabel: string; // e.g. "09.00" (WIB)
   endLabel: string;
   bookerName: string;
-  division: string;
+  satker: string;
   agenda: string;
   attendeeCount: number;
+  roomId: string;
+  roomName: string;
 };
 
 export type LogDay = { dateKey: string; count: number; entries: LogEntry[] };
 
-export type LogData = { year: number; days: LogDay[]; divisions: string[]; total: number };
+export type LogData = { year: number; days: LogDay[]; satkers: string[]; total: number };
 
 export type LogSearchParams = URLSearchParams | Record<string, string | string[] | undefined>;
 
@@ -78,12 +83,14 @@ export function parseLogFilters(params: LogSearchParams, now: Date = new Date())
   const defaultYear = Number(todayInJakarta(now).slice(0, 4));
   const filters: LogFilters = { year: pick(yearSchema, readParam(params, 'year')) ?? defaultYear };
 
-  const division = pick(textSchema(BOOKING_LIMITS.division), readParam(params, 'division'));
+  const room = readParam(params, 'room');
+  const satker = pick(textSchema(BOOKING_LIMITS.satker), readParam(params, 'satker'));
   const dateStart = pick(dateSchema, readParam(params, 'dateStart'));
   const dateEnd = pick(dateSchema, readParam(params, 'dateEnd'));
   const bookerName = pick(textSchema(BOOKING_LIMITS.bookerName), readParam(params, 'bookerName'));
 
-  if (division) filters.division = division;
+  if (isUuid(room)) filters.room = room.toLowerCase();
+  if (satker) filters.satker = satker;
   if (dateStart) filters.dateStart = dateStart;
   if (dateEnd) filters.dateEnd = dateEnd;
   if (bookerName) filters.bookerName = bookerName;
@@ -116,14 +123,16 @@ function toLogEntry(row: LogBooking): LogEntry {
     startLabel: formatTime(row.startsAt),
     endLabel: formatTime(row.endsAt),
     bookerName: row.bookerName,
-    division: row.division,
+    satker: row.satker,
     agenda: row.agenda,
     attendeeCount: row.attendeeCount,
+    roomId: row.roomId,
+    roomName: row.room.name,
   };
 }
 
 // Groups by WIB day of startsAt; days and entries ordered by start.
-export function buildLogData(rows: LogBooking[], f: LogFilters, divisions: string[]): LogData {
+export function buildLogData(rows: LogBooking[], f: LogFilters, satkers: string[]): LogData {
   const sorted = [...rows].sort((a, b) => a.startsAt.getTime() - b.startsAt.getTime());
   const byDay = new Map<string, LogEntry[]>();
   for (const row of sorted) {
@@ -137,15 +146,16 @@ export function buildLogData(rows: LogBooking[], f: LogFilters, divisions: strin
     .sort(([a], [b]) => a.localeCompare(b))
     .map(([dateKey, entries]) => ({ dateKey, count: entries.length, entries }));
 
-  return { year: f.year, days, divisions, total: sorted.length };
+  return { year: f.year, days, satkers, total: sorted.length };
 }
 
 export const EXPORT_COLUMNS = [
   'Tanggal',
   'Jam Mulai',
   'Jam Selesai',
+  'Ruangan',
   'Pemesan',
-  'Divisi',
+  'Satker/Instansi',
   'Jumlah Hadir',
   'Agenda',
 ] as const;
@@ -159,8 +169,9 @@ export function toExportRows(rows: LogBooking[]): string[][] {
       toJakartaDateString(row.startsAt),
       formatTime(row.startsAt),
       formatTime(row.endsAt),
+      row.room.name,
       row.bookerName,
-      row.division,
+      row.satker,
       String(row.attendeeCount),
       row.agenda,
     ]),
@@ -175,10 +186,12 @@ export const ATTENDEE_EXPORT_COLUMNS = [
   'Tanggal',
   'Jam Mulai',
   'Jam Selesai',
+  'Ruangan',
   'Agenda',
   'Pemesan',
   'Nama Peserta',
-  'Biro/Divisi/Instansi',
+  'Jenis Kelamin',
+  'Satker/Instansi',
   'Sebagai',
   'Waktu Hadir',
 ] as const;
@@ -186,7 +199,8 @@ export const ATTENDEE_EXPORT_COLUMNS = [
 export type ExportAttendee = {
   bookingId: string;
   name: string;
-  division: string;
+  satker: string;
+  gender: Gender | null;
   role: string | null;
   signedAt: Date;
 };
@@ -221,14 +235,16 @@ export function toAttendeeExport(
         date,
         start,
         end,
+        b.room.name,
         b.agenda,
         b.bookerName,
         a.name,
-        a.division,
+        genderCode(a.gender),
+        a.satker,
         role,
         `${signedDate} ${signedTime}`,
       ]);
-      lines.push(`${i + 1}. ${a.name} · ${a.division} · ${role} · ${signedTime}, ${signedDate}`);
+      lines.push(`${i + 1}. ${a.name} (${genderCode(a.gender)}) · ${a.satker} · ${role} · ${signedTime}, ${signedDate}`);
     });
     linesByRow.push(lines);
   }

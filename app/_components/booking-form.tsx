@@ -1,18 +1,25 @@
 'use client';
 
 import { useActionState } from 'react';
-import { createBooking } from '@/app/actions/booking';
-import { initialBookingFormState } from '@/lib/booking/types';
+import { useFormStatus } from 'react-dom';
+import { initialBookingFormState, type BookingFormState } from '@/lib/booking/types';
 import { BookingFields } from './booking-fields';
+import { RecaptchaNotice, useRecaptchaFormAction } from './recaptcha';
 
-export function BookingForm() {
-  const [state, formAction, pending] = useActionState(createBooking, initialBookingFormState);
+type BookingAction = (state: BookingFormState, formData: FormData) => Promise<BookingFormState>;
+
+// `action` arrives already bound to the room id (server re-checks the room).
+// recaptchaSiteKey: null/undefined = reCAPTCHA disabled.
+export function BookingForm({ action, recaptchaSiteKey }: { action: BookingAction; recaptchaSiteKey?: string | null }) {
+  const [state, dispatch, pending] = useActionState(action, initialBookingFormState);
+  const recaptcha = useRecaptchaFormAction(dispatch, recaptchaSiteKey, 'booking');
 
   const errors = state.fieldErrors ?? {};
   const values = state.values ?? {};
 
   return (
-    <form action={formAction} className="space-y-5">
+    <form action={recaptcha.formAction} className="space-y-5">
+      {recaptcha.recaptchaScript}
       {state.status !== 'idle' && state.message && (
         <p
           role={state.status === 'error' ? 'alert' : 'status'}
@@ -28,14 +35,24 @@ export function BookingForm() {
 
       <BookingFields idPrefix="" values={values} errors={errors} />
 
-      <button
-        type="submit"
-        disabled={pending}
-        aria-disabled={pending}
-        className="inline-flex w-full items-center justify-center rounded-lg bg-primary px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-primary/90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary disabled:cursor-not-allowed disabled:opacity-60 motion-safe:transition-colors"
-      >
-        {pending ? 'Menyimpan…' : 'Simpan Booking'}
-      </button>
+      <SubmitButton pending={pending} />
+      {recaptcha.enabled && <RecaptchaNotice />}
     </form>
+  );
+}
+
+// useFormStatus also covers the reCAPTCHA token fetch before dispatch.
+function SubmitButton({ pending }: { pending: boolean }) {
+  const { pending: formPending } = useFormStatus();
+  const busy = pending || formPending;
+  return (
+    <button
+      type="submit"
+      disabled={busy}
+      aria-disabled={busy}
+      className="inline-flex w-full items-center justify-center rounded-lg bg-primary px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-primary/90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary disabled:cursor-not-allowed disabled:opacity-60 motion-safe:transition-colors"
+    >
+      {busy ? 'Menyimpan…' : 'Simpan Booking'}
+    </button>
   );
 }

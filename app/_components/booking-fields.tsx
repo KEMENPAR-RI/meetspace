@@ -144,7 +144,7 @@ export function BookingFields({ original, ...props }: Props) {
   );
 }
 
-// Name, division and agenda only (text-only edit of finished bookings).
+// Name, satker and agenda only (text-only edit of finished bookings).
 export function BookingTextFields(props: TextFieldsProps) {
   const { errors } = props;
   const { fieldId, fieldProps } = fieldWiring(props);
@@ -162,14 +162,14 @@ export function BookingTextFields(props: TextFieldsProps) {
         />
       </Field>
 
-      <Field label="Nama Tim / Divisi" id={fieldId('division')} error={errors.division}>
+      <Field label="Satker/Instansi" id={fieldId('satker')} error={errors.satker}>
         <input
           type="text"
           required
-          maxLength={BOOKING_LIMITS.division}
+          maxLength={BOOKING_LIMITS.satker}
           autoComplete="organization"
           className={inputClass}
-          {...fieldProps('division')}
+          {...fieldProps('satker')}
         />
       </Field>
 

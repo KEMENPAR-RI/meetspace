@@ -1,5 +1,7 @@
 'use client';
 
+import { APP_MAINTAINER } from '@/lib/maintainer';
+
 import './globals.css';
 
 // Replaces the root layout, so it renders its own html/body.
@@ -20,7 +22,7 @@ export default function GlobalError({
             Aplikasi gagal dimuat
           </h1>
           <p className="mt-3 text-sm text-zinc-600">
-            Silakan coba lagi. Jika masalah berlanjut, hubungi tim APJAR.
+            Silakan coba lagi. Jika masalah berlanjut, hubungi tim {APP_MAINTAINER}.
           </p>
           {error.digest && (
             <p className="mt-3 text-xs text-zinc-500">

@@ -3,9 +3,9 @@ import PDFDocument from 'pdfkit';
 
 // Heavy libs: import this module dynamically from the export route only.
 
-const XLSX_WIDTHS = [12, 10, 11, 28, 22, 12, 60];
-const ATTENDEE_XLSX_WIDTHS = [12, 10, 11, 40, 22, 28, 22, 16, 18];
-const ATTENDEE_AGENDA_COL = 4;
+const XLSX_WIDTHS = [12, 10, 11, 20, 28, 22, 12, 60];
+const ATTENDEE_XLSX_WIDTHS = [12, 10, 11, 20, 40, 22, 28, 14, 22, 16, 18];
+const ATTENDEE_AGENDA_COL = 5;
 
 // rows[0] is the header (see toExportRows).
 export async function buildLogXlsx(
@@ -42,7 +42,7 @@ export async function buildLogXlsx(
 const PDF_MARGIN = 36;
 const PDF_PAD = 4;
 // Fractions of the usable width, one per column.
-const PDF_WIDTHS = [0.1, 0.08, 0.08, 0.17, 0.15, 0.07, 0.35];
+const PDF_WIDTHS = [0.09, 0.07, 0.07, 0.12, 0.14, 0.13, 0.06, 0.32];
 const PDF_SUB_INDENT = 16;
 const PDF_SUB_FONT = 8;
 

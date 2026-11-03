@@ -12,10 +12,12 @@ import {
   ATTENDANCE_FIELDS,
   ATTENDANCE_LIMITS,
   ATTENDEE_ROLES,
+  GENDERS,
   BOOKING_FIELDS,
   BOOKING_LIMITS,
   type AttendanceField,
   type AttendeeRole,
+  type Gender,
   type BookingField,
 } from './types';
 
@@ -27,7 +29,7 @@ export type BookingInput = {
   startsAt: Date;
   endsAt: Date;
   bookerName: string;
-  division: string;
+  satker: string;
   agenda: string;
 };
 
@@ -70,7 +72,7 @@ const timeField = (label: string) =>
 // Text-only fields; also used alone to edit finished bookings.
 const textSchema = z.object({
   bookerName: requiredText('Nama pemesan', BOOKING_LIMITS.bookerName),
-  division: requiredText('Divisi', BOOKING_LIMITS.division),
+  satker: requiredText('Satker/Instansi', BOOKING_LIMITS.satker),
   agenda: requiredText('Agenda', BOOKING_LIMITS.agenda),
 });
 
@@ -143,7 +145,7 @@ function buildSchema(now: Date, options: ParseBookingOptions = {}) {
         startsAt: toInstant(v.date, v.startTime),
         endsAt: toInstant(v.date, v.endTime),
         bookerName: v.bookerName,
-        division: v.division,
+        satker: v.satker,
         agenda: v.agenda,
       }),
     );
@@ -173,10 +175,10 @@ export function parseBookingInput(
   return { ok: false, fieldErrors: toFieldErrors(result.error.issues), values };
 }
 
-// Only bookerName/division/agenda are read; date/time are ignored even if sent.
+// Only bookerName/satker/agenda are read; date/time are ignored even if sent.
 export function readBookingTextValues(formData: FormData): BookingValues {
   const all = readBookingValues(formData);
-  return { bookerName: all.bookerName, division: all.division, agenda: all.agenda };
+  return { bookerName: all.bookerName, satker: all.satker, agenda: all.agenda };
 }
 
 export function parseBookingText(formData: FormData): ParseBookingTextResult {
@@ -217,7 +219,8 @@ const NAME_KEY_MAX = 150;
 export type AttendanceInput = {
   name: string;
   nameKey: string;
-  division: string;
+  satker: string;
+  gender: Gender;
   role: AttendeeRole;
   phone: string | null;
 };
@@ -266,10 +269,11 @@ const attendanceSchema = z.object({
         .max(ATTENDANCE_LIMITS.attendeeName, `Nama maksimal ${ATTENDANCE_LIMITS.attendeeName} karakter.`)
         .refine(hasNoControlChars, 'Nama mengandung karakter yang tidak valid.'),
     ),
-  division: z
+  satker: z
     .string()
     .transform(stripInvisible)
-    .pipe(requiredText('Biro/Divisi/Instansi', ATTENDANCE_LIMITS.division)),
+    .pipe(requiredText('Satker/Instansi', ATTENDANCE_LIMITS.satker)),
+  gender: z.enum(GENDERS, 'Pilih jenis kelamin.'),
   role: z.enum(ATTENDEE_ROLES, 'Pilih peran kehadiran.'),
   phone: z
     .string()
@@ -315,8 +319,8 @@ export function parseAttendanceInput(formData: FormData): ParseAttendanceResult 
   if (!result.success || Object.keys(fieldErrors).length > 0) {
     return { ok: false, fieldErrors, values };
   }
-  const { attendeeName, division, role, phone } = result.data;
-  return { ok: true, data: { name: attendeeName, nameKey, division, role, phone } };
+  const { attendeeName, satker, gender, role, phone } = result.data;
+  return { ok: true, data: { name: attendeeName, nameKey, satker, gender, role, phone } };
 }
 
 function isAttendanceField(value: string): value is AttendanceField {

@@ -3,14 +3,14 @@
 :root {
   --background: #f8fafc;
   --foreground: #171717;
-}
-
-@theme {
-  --color-primary: #132b50;
-  --color-secondary: #e9c06f;
+  /* Overridden per request from app settings (root layout). */
+  --primary: #132b50;
+  --secondary: #e9c06f;
 }
 
 @theme inline {
+  --color-primary: var(--primary);
+  --color-secondary: var(--secondary);
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --font-sans: var(--font-geist-sans);

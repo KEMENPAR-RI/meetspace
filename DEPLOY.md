@@ -52,7 +52,6 @@ FLUSH PRIVILEGES;
 ```sh
 cp .env.example .env
 chmod 600 .env
-openssl rand -hex 32     # salin hasilnya ke ADMIN_SESSION_SECRET
 nano .env
 ```
 
@@ -63,14 +62,13 @@ DB_PORT=3306
 DB_DATABASE=booking_rapat
 DB_USERNAME=booking
 DB_PASSWORD=PASSWORD_KUAT
-ADMIN_PASSWORD="password-admin"
-ADMIN_SESSION_SECRET="hasil-openssl-tadi"
-OFFICE_ALLOWED_IPS="203.0.113.10"
-TRUSTED_IP_HEADER="x-real-ip"
-OFFICE_IP_CHECK=true
+APP_URL="https://rapat.example.go.id"
+NEXT_PUBLIC_APP_MAINTAINER=APJAR
 ```
 
-- `OFFICE_ALLOWED_IPS`: IP kantor, pisahkan dengan koma. Kosong = semua orang ditolak.
+- `APP_URL`: alamat publik (domain di bagian 4), tanpa path. Dipakai untuk QR dan link. Kosong = QR nonaktif.
+- Batas login, cek IP kantor, header IP, dan maks peserta tidak lagi di `.env`. Semua diatur superadmin di `/dashboard/pengaturan` (disimpan di DB). Default: login 10x/username dan 50x/IP per 15 menit, cek IP kantor nonaktif, header `x-real-ip`, maks 200 peserta.
+- `NEXT_PUBLIC_APP_MAINTAINER`: nama pengelola di halaman error. Nilainya tertanam saat build: setelah diubah wajib `docker compose build` ulang (restart saja tidak cukup). Kosong = `APJAR`.
 - `DB_HOST` biarkan saja, Docker mengisinya `127.0.0.1`.
 - `COMPOSE_FILE` dan `DOCKER_DB_HOST` tidak dipakai lagi. Kalau ada di `.env`, hapus.
 - Kalau ada `DATABASE_URL` atau `DATABASE_URL_UNPOOLED`, hapus.
@@ -90,10 +88,20 @@ Cek hasilnya:
 ```sh
 docker compose ps                                  # tunggu sampai (healthy), kira-kira 1 menit
 docker compose run --rm migrate migrate status     # harus "Database schema is up to date!"
-curl -I http://127.0.0.1:8282/                     # 403 = normal kalau OFFICE_IP_CHECK=true
+curl -I http://127.0.0.1:8282/                     # 403 = normal kalau cek IP kantor aktif
 ```
 
 `(healthy)` dan `403` hanya berarti aplikasi sudah listen, bukan berarti DB tersambung. Koneksi DB dicek lewat `migrate status` di atas. Hasil migration ada di output terminal (container `migrate` langsung dihapus).
+
+Buat akun superadmin (interaktif: username, nama, password diketik tersembunyi). Perintah yang sama dipakai untuk reset password superadmin:
+
+```sh
+docker build --target build -t booking-rapat-tools .      # pakai cache dari `docker compose build`
+docker run --rm -it --network host -e DB_HOST=127.0.0.1 \
+  -v "$PWD/.env:/app/.env:ro" booking-rapat-tools npm run db:seed:superadmin
+```
+
+Setelah domain + HTTPS terpasang (bagian 4), login di `https://DOMAIN/dashboard/login`, lalu atur `/dashboard/pengaturan`.
 
 ## 4. Pasang domain di aaPanel
 
@@ -116,7 +124,9 @@ location / {
 sudo nginx -t && sudo nginx -s reload
 ```
 
-Baris `X-Real-IP` wajib ada. Aplikasi membaca IP pengunjung dari situ (`TRUSTED_IP_HEADER="x-real-ip"`) untuk cek IP kantor.
+Baris `X-Real-IP` wajib ada. Aplikasi membaca IP pengunjung dari situ (header default di `/dashboard/pengaturan`) untuk cek IP kantor dan batas login. Kalau header salah, semua percobaan login dihitung satu IP, sehingga satu orang bisa membuat semua admin terkunci.
+
+HTTPS wajib: dashboard dan login bisa diakses dari internet, dan cookie sesi hanya dikirim lewat HTTPS. Pasang SSL di aaPanel (Website > domain > SSL > Let's Encrypt) dan aktifkan Force HTTPS.
 
 ## 5. Update aplikasi
 
@@ -148,6 +158,103 @@ docker compose up -d --no-build --no-deps app
 
 Hapus image lama yang tidak dipakai lagi: `docker rmi booking-rapat:TAG booking-rapat-migrate:TAG`.
 
+### Upgrade ke versi multi-ruangan (sekali, dari versi `ADMIN_PASSWORD`)
+
+Login berubah: password bersama `ADMIN_PASSWORD` diganti akun per orang, sesi disimpan di DB (berlaku 2 jam, cookie `br_session`). **Semua admin ter-logout saat deploy** dan baru bisa login setelah dibuatkan akun oleh superadmin. Data booking lama otomatis masuk ruangan "Ruang Rapat". Env lama (`ADMIN_*`, `OFFICE_*`, `TRUSTED_IP_HEADER`, `PUBLIC_ATTENDANCE_*`) tidak dibaca lagi; biarkan dulu untuk rollback.
+
+1) Backup DB (wajib, sebelum migrate) dan `.env`:
+
+```sh
+mkdir -p ~/backup && chmod 700 ~/backup
+/www/server/mysql/bin/mysqldump -u booking -p --single-transaction --routines --triggers booking_rapat \
+  > ~/backup/booking_rapat-$(date +%F-%H%M).sql
+ls -lh ~/backup/                                   # pastikan file tidak 0 byte
+cp .env ~/backup/env-sebelum-multiruangan && chmod 600 ~/backup/env-sebelum-multiruangan
+```
+
+2) Tambah `APP_URL` di `.env`:
+
+```sh
+nano .env
+grep '^APP_URL=' .env
+```
+
+3) Build, migrate, start:
+
+```sh
+git pull
+export APP_TAG=$(git rev-parse HEAD | cut -c1-7)
+docker compose build && docker compose run --rm migrate && docker compose up -d \
+  && sed -i -e '/^APP_TAG=/d' -e '$a\' .env && echo "APP_TAG=$APP_TAG" >> .env
+docker compose run --rm migrate migrate status     # harus "Database schema is up to date!"
+```
+
+4) Buat superadmin:
+
+```sh
+docker build --target build -t booking-rapat-tools .      # pakai cache dari `docker compose build`
+docker run --rm -it --network host -e DB_HOST=127.0.0.1 \
+  -v "$PWD/.env:/app/.env:ro" booking-rapat-tools npm run db:seed:superadmin
+```
+
+5) Login di `https://DOMAIN/dashboard/login` sebagai superadmin, lalu:
+- Pengaturan (`/dashboard/pengaturan`): aktifkan cek IP kantor dan isi daftar IP kantor bila perlu (dulu `OFFICE_IP_CHECK` / `OFFICE_ALLOWED_IPS`), pastikan header IP `x-real-ip`.
+- Akun > Akun baru: buat akun role Admin untuk tiap admin lama.
+- Ruangan > "Ruang Rapat": pilih admin penanggung jawab, simpan.
+- Bagikan username + password awal ke tiap admin; minta mereka ganti password di menu Password.
+
+Kalau sudah stabil, hapus env lama dan salinan `.env`:
+
+```sh
+sed -i -E '/^(ADMIN_PASSWORD|ADMIN_SESSION_SECRET|OFFICE_IP_CHECK|OFFICE_ALLOWED_IPS|TRUSTED_IP_HEADER|PUBLIC_ATTENDANCE_[A-Z_]+)=/d' .env
+rm ~/backup/env-sebelum-multiruangan
+```
+
+Rollback upgrade ini (urut, jangan kembalikan `.env` sebelum `down.sql` jalan karena file-nya ada di image migrate versi baru). Akun, ruangan, sesi, pengaturan, dan kolom jenis kelamin hilang; booking dan daftar hadir tetap ada:
+
+```sh
+docker compose stop app
+docker compose run --rm migrate db execute --file prisma/migrations/20261103000000_multi_room/down.sql
+cp ~/backup/env-sebelum-multiruangan .env           # berisi APP_TAG lama + ADMIN_PASSWORD
+docker compose up -d --no-build --no-deps app
+```
+
+Kalau `down.sql` gagal, pulihkan dari backup (booking yang dibuat setelah upgrade ikut hilang):
+
+```sh
+docker compose stop app
+/www/server/mysql/bin/mysql -u booking -p booking_rapat < ~/backup/booking_rapat-TANGGAL.sql
+cp ~/backup/env-sebelum-multiruangan .env
+docker compose up -d --no-build --no-deps app
+```
+
+### Upgrade proteksi publik (migration `20261104000000_public_protection`)
+
+Menambah tabel `attendance_device_locks`, batas request publik, dan reCAPTCHA v3 (diatur di Pengaturan, bukan `.env`).
+
+```sh
+grep -q '^NEXT_PUBLIC_APP_MAINTAINER=' .env || { sed -i '$a\' .env && echo 'NEXT_PUBLIC_APP_MAINTAINER=APJAR' >> .env; }
+git pull
+export APP_TAG=$(git rev-parse HEAD | cut -c1-7)
+docker compose build && docker compose run --rm migrate && docker compose up -d \
+  && sed -i -e '/^APP_TAG=/d' -e '$a\' .env && echo "APP_TAG=$APP_TAG" >> .env
+docker compose run --rm migrate migrate status     # harus "Database schema is up to date!"
+```
+
+Setelah deploy, login superadmin > `/dashboard/pengaturan?tab=proteksi`:
+- Tab `ip-kantor`: pastikan daftar IP kantor benar. IP di daftar itu tidak kena batas request per IP (kunci per perangkat tetap berlaku).
+- reCAPTCHA: buat key v3 di https://www.google.com/recaptcha/admin (domain = domain publik), isi Site key + Secret key, lalu aktifkan. Secret hanya bisa diganti/dihapus, tidak ditampilkan lagi.
+- Tab `daftar-hadir`: atur jeda per perangkat (default 30 menit).
+
+Rollback migration ini saja:
+
+```sh
+docker compose stop app
+docker compose run --rm migrate db execute --file prisma/migrations/20261104000000_public_protection/down.sql
+sed -i 's/^APP_TAG=.*/APP_TAG=TAG_LAMA/' .env       # ganti TAG_LAMA
+docker compose up -d --no-build --no-deps app
+```
+
 ## 6. Kalau ada masalah
 
 | Error | Penyebab | Solusi |
@@ -172,7 +279,7 @@ docker compose run --rm migrate
 Rollback database: jalankan `down.sql` dari migration terbaru mundur ke yang ingin dibatalkan (urutan terbalik). Contoh batalkan migration terakhir saja:
 
 ```sh
-docker compose run --rm migrate db execute --file prisma/migrations/20261029000000_public_attendance/down.sql
+docker compose run --rm migrate db execute --file prisma/migrations/20261104000000_public_protection/down.sql
 ```
 
 Rollback penuh, urutan terbalik. **Awas: semua tabel dan data booking terhapus.**
@@ -186,4 +293,4 @@ done
 ## Catatan keamanan
 
 - Jangan commit atau bagikan `.env`.
-- Pertimbangkan `limit_req` (pembatas jumlah request) di nginx untuk halaman login admin.
+- Pertimbangkan `limit_req` (pembatas jumlah request) di nginx untuk `/dashboard/login`.

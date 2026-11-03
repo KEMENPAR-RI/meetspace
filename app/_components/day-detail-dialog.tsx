@@ -7,13 +7,14 @@ import { deletePastBooking } from '@/app/actions/log';
 import type { LogDay, LogEntry } from '@/lib/booking/log';
 import { APP_TZ_LABEL, formatDateLabel, getBookingStatus, toInstant } from '@/lib/booking/time';
 import { useConfirm } from './confirm-dialog';
+import type { RoomOption } from '@/lib/room/types';
 import { EditBookingDialog } from './edit-booking-dialog';
 import { EditPastBookingDialog } from './edit-past-booking-dialog';
 import { StatusBadge } from './status-badge';
 
-type Props = { day: LogDay | null; onClose: () => void };
+type Props = { day: LogDay | null; rooms: Pick<RoomOption, 'id' | 'name'>[]; onClose: () => void };
 
-export function DayDetailDialog({ day, onClose }: Props) {
+export function DayDetailDialog({ day, rooms, onClose }: Props) {
   const dialogRef = useRef<HTMLDialogElement | null>(null);
   const closeRef = useRef<HTMLButtonElement>(null);
   // Mode (past/upcoming) decided at click time, so it tracks the current clock.
@@ -99,7 +100,12 @@ export function DayDetailDialog({ day, onClose }: Props) {
               <p className="mt-1.5 text-sm text-zinc-600">
                 <span className="font-medium text-zinc-800">{e.bookerName}</span>
                 <span aria-hidden="true"> · </span>
-                {e.division}
+                <span className="sr-only">Satker/Instansi: </span>
+                {e.satker}
+              </p>
+              <p className="mt-0.5 text-xs font-medium text-zinc-500">
+                <span className="sr-only">Ruangan: </span>
+                {e.roomName}
               </p>
               {/* Plain text only; line breaks kept via CSS */}
               <p className="mt-2 whitespace-pre-line break-words text-sm text-zinc-700">{e.agenda}</p>
@@ -108,7 +114,7 @@ export function DayDetailDialog({ day, onClose }: Props) {
                   {e.attendeeCount} hadir
                 </span>
                 <Link
-                  href={`/rapat/${e.id}`}
+                  href={`/dashboard/rapat/${e.id}`}
                   aria-label={`Daftar hadir reservasi ${e.bookerName} ${e.startLabel}–${e.endLabel}`}
                   className="rounded-md border border-primary/30 bg-white px-2.5 py-1 text-xs font-medium text-primary hover:bg-primary/5 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary motion-safe:transition-colors"
                 >
@@ -156,9 +162,12 @@ export function DayDetailDialog({ day, onClose }: Props) {
               startsAt: editing.entry.startISO,
               endsAt: editing.entry.endISO,
               bookerName: editing.entry.bookerName,
-              division: editing.entry.division,
+              satker: editing.entry.satker,
               agenda: editing.entry.agenda,
+              roomId: editing.entry.roomId,
+              roomName: editing.entry.roomName,
             }}
+            rooms={rooms}
             onClose={closeEdit}
           />
         ))}
@@ -166,7 +175,7 @@ export function DayDetailDialog({ day, onClose }: Props) {
   );
 }
 
-// Finished → deletePastBooking, otherwise → cancelBooking; both actions re-check admin + status.
+// Finished → deletePastBooking, otherwise → cancelBooking; both actions re-check access + status.
 function DeleteEntryButton({
   id,
   endISO,

@@ -1,7 +1,7 @@
 import type { NextRequest } from 'next/server';
 import { z } from 'zod';
 
-import { isAdmin } from '@/lib/auth/session';
+import { authorizeUser, canAccessRoom, getRoomScope } from '@/lib/auth/access';
 import {
   LOG_MAX_ATTENDEES,
   LOG_MAX_ROWS,
@@ -11,6 +11,7 @@ import {
   toExportRows,
 } from '@/lib/booking/log';
 import { getLogAttendees, getLogBookings } from '@/lib/booking/queries';
+import { getAppearance } from '@/lib/settings/queries';
 
 const formatSchema = z.enum(['xlsx', 'pdf']);
 
@@ -25,7 +26,7 @@ function jsonError(status: number, message: string): Response {
   return Response.json({ error: message }, { status, headers: NO_STORE });
 }
 
-// GET /api/log/export?format=xlsx|pdf&year=&division=&dateStart=&dateEnd=&bookerName=
+// GET /api/log/export?format=xlsx|pdf&room=&year=&satker=&dateStart=&dateEnd=&bookerName=
 export async function GET(request: NextRequest): Promise<Response> {
   // Block cross-site navigations; clients without the header pass.
   const fetchSite = request.headers.get('sec-fetch-site');
@@ -33,8 +34,9 @@ export async function GET(request: NextRequest): Promise<Response> {
     return jsonError(403, 'Permintaan lintas situs ditolak.');
   }
 
-  // Second gate after the proxy IP allowlist; isAdmin() also defers the clock (io()).
-  if (!(await isAdmin())) return jsonError(401, 'Tidak diizinkan.');
+  // Second gate after the proxy IP allowlist; the session read also defers the clock (io()).
+  const user = await authorizeUser();
+  if (!user) return jsonError(401, 'Tidak diizinkan.');
 
   const params = request.nextUrl.searchParams;
   const format = formatSchema.safeParse(params.get('format'));
@@ -42,8 +44,15 @@ export async function GET(request: NextRequest): Promise<Response> {
 
   // Same parser as the page, so the export matches the active filter.
   const filters = parseLogFilters(params);
+  // Out-of-scope room looks like a missing one (G4).
+  if (filters.room && !canAccessRoom(user, filters.room)) return jsonError(404, 'Ruangan tidak ditemukan.');
   const range = resolveRange(filters);
-  const filter = { division: filters.division, bookerName: filters.bookerName };
+  const filter = {
+    satker: filters.satker,
+    bookerName: filters.bookerName,
+    roomId: filters.room,
+    scope: getRoomScope(user),
+  };
   const { rows: bookings, truncated } = await getLogBookings(range, filter);
   if (truncated) {
     return jsonError(
@@ -63,10 +72,12 @@ export async function GET(request: NextRequest): Promise<Response> {
 
   const { buildLogPdf, buildLogXlsx } = await import('@/lib/booking/log-export');
   const title = `Log Reservasi ${filters.year}`;
+  // PDF heading carries the institution / app name; the XLSX sheet name stays short (Excel: 31 chars).
+  const { appName, institutionName } = await getAppearance();
   const body =
     format.data === 'xlsx'
       ? await buildLogXlsx(rows, title, sheetRows)
-      : await buildLogPdf(rows, title, linesByRow);
+      : await buildLogPdf(rows, `${institutionName ?? appName} - ${title}`, linesByRow);
 
   return new Response(body, {
     headers: {

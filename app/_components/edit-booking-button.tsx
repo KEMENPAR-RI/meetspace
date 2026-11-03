@@ -2,9 +2,10 @@
 
 import { useState } from 'react';
 import type { EditableBooking } from '@/lib/booking/types';
+import type { RoomOption } from '@/lib/room/types';
 import { EditBookingDialog } from './edit-booking-dialog';
 
-export function EditBookingButton({ booking }: { booking: EditableBooking }) {
+export function EditBookingButton({ booking, rooms }: { booking: EditableBooking & { roomName?: string }; rooms: Pick<RoomOption, 'id' | 'name'>[] }) {
   const [open, setOpen] = useState(false);
 
   return (
@@ -17,7 +18,7 @@ export function EditBookingButton({ booking }: { booking: EditableBooking }) {
         Edit
       </button>
       {/* Mounted on demand: one form in the DOM, fresh action state per open. */}
-      {open && <EditBookingDialog booking={booking} onClose={() => setOpen(false)} />}
+      {open && <EditBookingDialog booking={booking} rooms={rooms} onClose={() => setOpen(false)} />}
     </>
   );
 }

@@ -3,14 +3,21 @@
 import { startTransition, useActionState, useCallback, useEffect, useRef } from 'react';
 import { updateBooking } from '@/app/actions/booking';
 import { initialBookingFormState, type EditableBooking } from '@/lib/booking/types';
+import type { RoomOption } from '@/lib/room/types';
 import { toJakartaDateString, toJakartaTimeInput } from '@/lib/booking/time';
 import { BookingFields } from './booking-fields';
 import { useConfirm } from './confirm-dialog';
 
-type Props = { booking: EditableBooking; onClose: () => void };
+// rooms: active rooms in the user's scope (H3); server re-checks both source and target.
+// roomName labels the current room when it is no longer an allowed target.
+type Props = {
+  booking: EditableBooking & { roomName?: string };
+  rooms: Pick<RoomOption, 'id' | 'name'>[];
+  onClose: () => void;
+};
 
-export function EditBookingDialog({ booking, onClose }: Props) {
-  // Bound id is untrusted client input; the action re-checks admin + id.
+export function EditBookingDialog({ booking, rooms, onClose }: Props) {
+  // Bound id is untrusted client input; the action re-checks access + id.
   const [state, formAction, pending] = useActionState(
     updateBooking.bind(null, booking.id),
     initialBookingFormState,
@@ -37,9 +44,15 @@ export function EditBookingDialog({ booking, onClose }: Props) {
     startTime: toJakartaTimeInput(start),
     endTime: toJakartaTimeInput(end),
     bookerName: booking.bookerName,
-    division: booking.division,
+    satker: booking.satker,
     agenda: booking.agenda,
   };
+  const roomError = state.fieldErrors?.roomId;
+  const roomValue = state.values?.roomId ?? booking.roomId;
+  // Current room may be inactive now; keep it selectable so a text-only edit still works.
+  const roomOptions = rooms.some((r) => r.id === booking.roomId)
+    ? rooms
+    : [{ id: booking.roomId, name: booking.roomName ?? 'Ruangan saat ini' }, ...rooms];
 
   const onSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -92,6 +105,32 @@ export function EditBookingDialog({ booking, onClose }: Props) {
               {state.message}
             </p>
           )}
+
+          <div className="min-w-0 space-y-1.5">
+            <label htmlFor="edit-roomId" className="block text-sm font-medium text-zinc-800">
+              Ruangan
+            </label>
+            <select
+              id="edit-roomId"
+              name="roomId"
+              required
+              defaultValue={roomValue}
+              aria-invalid={roomError ? true : undefined}
+              aria-describedby={roomError ? 'edit-roomId-error' : undefined}
+              className="block w-full min-w-0 rounded-lg border border-zinc-300 bg-white px-3 py-2 text-base text-zinc-900 shadow-xs focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/25 aria-invalid:border-red-500 sm:text-sm"
+            >
+              {roomOptions.map((r) => (
+                <option key={r.id} value={r.id}>
+                  {r.name}
+                </option>
+              ))}
+            </select>
+            {roomError && (
+              <p id="edit-roomId-error" className="text-sm text-red-600">
+                {roomError}
+              </p>
+            )}
+          </div>
 
           <BookingFields
             idPrefix="edit-"

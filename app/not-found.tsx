@@ -2,7 +2,7 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 
 export const metadata: Metadata = {
-  title: 'Halaman Tidak Ditemukan · Booking Rapat',
+  title: 'Halaman Tidak Ditemukan',
 };
 
 export default function NotFound() {

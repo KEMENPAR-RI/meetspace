@@ -1,26 +1,28 @@
 import { prisma } from '@/lib/prisma';
+import { getAppSettings } from '@/lib/settings/queries';
 
-const DEFAULT_MAX = 5;
-const DEFAULT_WINDOW_MIN = 10;
-const DEFAULT_MAX_PER_BOOKING = 200;
 // Rows are dead once their window ends; keep a small margin.
 const RETENTION_MARGIN_MS = 60_000;
 // Roughly 1 in N requests prunes old rows.
 const CLEANUP_EVERY = 20;
+const MINUTE_MS = 60_000;
 
-function readPositiveInt(raw: string | undefined, fallback: number, max: number): number {
-  const value = Number(raw?.trim());
-  return Number.isInteger(value) && value > 0 && value <= max ? value : fallback;
+export type PublicQuotaResult = { ok: true } | { ok: false; retryAfterMin: number };
+
+export function rateLimitMessage(retryAfterMin: number): string {
+  return `Terlalu banyak percobaan, coba lagi dalam ${retryAfterMin} menit.`;
 }
 
-// Fixed window per IP key; true = allowed. Fails closed on DB errors.
-export async function consumePublicAttendanceQuota(ipKey: string, now: Date): Promise<boolean> {
-  const max = readPositiveInt(process.env.PUBLIC_ATTENDANCE_RATE_MAX, DEFAULT_MAX, 10_000);
-  const windowMs =
-    readPositiveInt(process.env.PUBLIC_ATTENDANCE_RATE_WINDOW_MIN, DEFAULT_WINDOW_MIN, 1440) * 60_000;
-  const windowStart = new Date(Math.floor(now.getTime() / windowMs) * windowMs);
-
+// Public mutations (attendance + booking) share one fixed window per IP key, across rooms.
+// Limits from app_settings (public_mutation_rate_*). Fails closed on DB errors.
+export async function consumePublicMutationQuota(ipKey: string, now: Date): Promise<PublicQuotaResult> {
+  let windowMs = 0;
   try {
+    const settings = await getAppSettings();
+    const max = settings.publicMutationRateMax;
+    windowMs = settings.publicMutationRateWindowMin * MINUTE_MS;
+    const windowStart = new Date(Math.floor(now.getTime() / windowMs) * windowMs);
+
     const [, row] = await prisma.$transaction([
       prisma.$executeRaw`INSERT INTO attendance_rate_limits (ip_key, window_start, hits)
         VALUES (${ipKey}, ${windowStart}, 1)
@@ -32,21 +34,19 @@ export async function consumePublicAttendanceQuota(ipKey: string, now: Date): Pr
     ]);
     // Awaited: fire-and-forget may be cut off on serverless.
     if (Math.random() * CLEANUP_EVERY < 1) await pruneOldWindows(now, windowMs);
-    return row !== null && row.hits <= max;
+    if (row !== null && row.hits <= max) return { ok: true };
+    const leftMs = windowStart.getTime() + windowMs - now.getTime();
+    return { ok: false, retryAfterMin: Math.max(1, Math.ceil(leftMs / MINUTE_MS)) };
   } catch (error) {
     console.error('[rate-limit] failed to record hit', error);
-    return false;
+    return { ok: false, retryAfterMin: Math.max(1, Math.ceil(windowMs / MINUTE_MS)) };
   }
 }
 
-// Total attendees cap for public submits; true = full. Fails closed on DB errors.
+// Total attendees cap for public submits (app_settings); true = full. Fails closed on DB errors.
 export async function isBookingAttendanceFull(bookingId: string): Promise<boolean> {
-  const max = readPositiveInt(
-    process.env.PUBLIC_ATTENDANCE_MAX_PER_BOOKING,
-    DEFAULT_MAX_PER_BOOKING,
-    100_000,
-  );
   try {
+    const max = (await getAppSettings()).publicAttendanceMaxPerBooking;
     const found = await prisma.booking.findUnique({
       where: { id: bookingId },
       select: { _count: { select: { attendances: true } } },

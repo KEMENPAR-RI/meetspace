@@ -76,6 +76,16 @@ export function getBookingStatus(startsAt: Date, endsAt: Date, now: Date): Booki
   return 'done';
 }
 
+const STATUS_ORDER: Record<BookingStatus, number> = { ongoing: 0, upcoming: 1, done: 2 };
+
+// Ongoing first, then upcoming, finished last; start time ascending within each group.
+export function sortByStatus<T extends { startsAt: Date; endsAt: Date }>(bookings: T[], now: Date): T[] {
+  return bookings
+    .map((b) => ({ b, rank: STATUS_ORDER[getBookingStatus(b.startsAt, b.endsAt, now)] }))
+    .sort((x, y) => x.rank - y.rank || x.b.startsAt.getTime() - y.b.startsAt.getTime())
+    .map(({ b }) => b);
+}
+
 // Pure calendar arithmetic on a YYYY-MM-DD string.
 export function addDays(date: string, days: number): string {
   const d = new Date(`${date}T00:00:00Z`);

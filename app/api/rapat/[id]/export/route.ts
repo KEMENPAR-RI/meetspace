@@ -1,14 +1,13 @@
 import type { NextRequest } from 'next/server';
 import { z } from 'zod';
 
-import { isAdmin } from '@/lib/auth/session';
+import { authorizeBooking, authorizeUser } from '@/lib/auth/access';
 import {
   ATTENDANCE_EXPORT_MAX,
   attendanceFileName,
   toAttendanceSheet,
 } from '@/lib/booking/attendance-export';
 import { getBookingAttendance } from '@/lib/booking/queries';
-import { isBookingId } from '@/lib/booking/validation';
 
 const formatSchema = z.enum(['xlsx', 'pdf']);
 
@@ -34,14 +33,17 @@ export async function GET(
     return jsonError(403, 'Permintaan lintas situs ditolak.');
   }
 
-  // Second gate after the proxy IP allowlist; isAdmin() also defers the clock (io()).
-  if (!(await isAdmin())) return jsonError(401, 'Tidak diizinkan.');
+  // Second gate after the proxy IP allowlist; the session read also defers the clock (io()).
+  const user = await authorizeUser();
+  if (!user) return jsonError(401, 'Tidak diizinkan.');
 
   const format = formatSchema.safeParse(request.nextUrl.searchParams.get('format'));
   if (!format.success) return jsonError(400, 'Format tidak valid (xlsx atau pdf).');
 
   const { id } = await ctx.params;
-  const data = isBookingId(id) ? await getBookingAttendance(id) : null;
+  // Missing and out-of-scope both 404 (G4).
+  const allowed = await authorizeBooking(user, id);
+  const data = allowed ? await getBookingAttendance(allowed.id) : null;
   if (!data) return jsonError(404, 'Rapat tidak ditemukan.');
 
   if (data.attendees.length > ATTENDANCE_EXPORT_MAX) {
@@ -63,7 +65,7 @@ export async function GET(
     headers: {
       ...NO_STORE,
       'content-type': CONTENT_TYPES[format.data],
-      'content-disposition': `attachment; filename="${attendanceFileName(data.booking.startsAt, format.data)}"`,
+      'content-disposition': `attachment; filename="${attendanceFileName(data.booking, format.data)}"`,
       'x-content-type-options': 'nosniff',
     },
   });

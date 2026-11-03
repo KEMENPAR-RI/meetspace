@@ -3,11 +3,12 @@
 import { useRef, useState } from 'react';
 import type { LogData } from '@/lib/booking/log';
 import { DayDetailDialog } from './day-detail-dialog';
+import type { RoomOption } from '@/lib/room/types';
 import { YearCalendar } from './year-calendar';
 
-type Props = { data: LogData; filtered: boolean };
+type Props = { data: LogData; filtered: boolean; rooms: Pick<RoomOption, 'id' | 'name'>[] };
 
-export function LogView({ data, filtered }: Props) {
+export function LogView({ data, filtered, rooms }: Props) {
   const [openKey, setOpenKey] = useState<string | null>(null);
   const headingRef = useRef<HTMLHeadingElement>(null);
   // Day emptied by a delete/edit: keep the dialog mounted so it closes itself.
@@ -54,7 +55,7 @@ export function LogView({ data, filtered }: Props) {
       <YearCalendar year={data.year} days={data.days} onPickDay={setOpenKey} />
 
       {/* Mounted on demand, like EditBookingDialog. */}
-      {openDay && <DayDetailDialog day={openDay} onClose={closeDay} />}
+      {openDay && <DayDetailDialog day={openDay} rooms={rooms} onClose={closeDay} />}
     </section>
   );
 }

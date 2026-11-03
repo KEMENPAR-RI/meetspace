@@ -13,14 +13,20 @@ model Booking {
   startsAt        DateTime @map("starts_at") @db.DateTime(6)
   endsAt          DateTime @map("ends_at") @db.DateTime(6)
   bookerName      String   @map("booker_name") @db.VarChar(100)
-  division        String   @db.VarChar(100)
+  // Column keeps its legacy name; labelled "Satker/Instansi" in the app.
+  satker          String   @map("division") @db.VarChar(100)
   agenda          String   @db.VarChar(1000)
   createdAt       DateTime @default(now()) @map("created_at") @db.DateTime(6)
   // ascii_bin collation lives in the migration SQL.
+  // Unused since attendance moved per room (/hadir/<roomId>); drop in a later contract migration.
   attendanceToken String?  @unique @map("attendance_token") @db.Char(32)
+  roomId          String   @map("room_id") @db.Char(36)
 
+  room        Room         @relation(fields: [roomId], references: [id], onDelete: Restrict)
   attendances Attendance[]
 
+  // Per-room schedule/overlap lookups; also backs the room_id FK.
+  @@index([roomId, startsAt])
   @@index([startsAt])
   @@index([endsAt])
   @@map("bookings")
@@ -32,10 +38,12 @@ model Attendance {
   bookingId String   @map("booking_id") @db.Char(36)
   name      String   @map("attendee_name") @db.VarChar(100)
   nameKey   String   @map("name_key") @db.VarChar(150)
-  division  String   @db.VarChar(100)
+  satker    String   @map("division") @db.VarChar(100)
   // role/phone use ascii_bin collation in the migration SQL; phone is normalized to 628xxx by the app.
   role      String?  @map("attendee_role") @db.VarChar(20)
   phone     String?  @db.VarChar(16)
+  // Nullable for legacy rows; required on new submits by the app.
+  gender    Gender?
   signature String   @db.VarChar(100)
   signedAt  DateTime @default(now()) @map("signed_at") @db.DateTime(6)
 
@@ -57,7 +65,103 @@ model AttendanceRateLimit {
   @@map("attendance_rate_limits")
 }
 
-// Single row (id = 1) locked FOR UPDATE to serialize booking time writes (ADR 0001).
+// Last public attendance submit per device (sha256 of the br_device cookie); device_key collation (ascii_bin) lives in the migration SQL.
+model AttendanceDeviceLock {
+  deviceKey    String   @id @map("device_key") @db.Char(64)
+  lastSubmitAt DateTime @map("last_submit_at") @db.DateTime(3)
+
+  @@index([lastSubmitAt])
+  @@map("attendance_device_locks")
+}
+
+enum Gender {
+  L
+  P
+}
+
+enum UserRole {
+  SUPERADMIN
+  ADMIN
+}
+
+// The capacity CHECK lives in the migration SQL.
+model Room {
+  id         String   @id @default(uuid()) @db.Char(36)
+  // utf8mb4_unicode_ci makes this unique case-insensitively.
+  name       String   @unique @db.VarChar(100)
+  building   String?  @db.VarChar(100)
+  floor      String?  @db.VarChar(20)
+  capacity   Int?     @db.UnsignedSmallInt
+  facilities String?  @db.VarChar(500)
+  isActive   Boolean  @default(true) @map("is_active")
+  createdAt  DateTime @default(now()) @map("created_at") @db.DateTime(6)
+  updatedAt  DateTime @updatedAt @map("updated_at") @db.DateTime(6)
+
+  bookings Booking[]
+  admins   RoomAdmin[]
+
+  @@index([isActive, name])
+  @@map("rooms")
+}
+
+// username (lowercased by the app) and password_hash use ascii_bin collation in the migration SQL.
+model User {
+  id           String   @id @default(uuid()) @db.Char(36)
+  username     String   @unique @db.VarChar(50)
+  name         String   @db.VarChar(100)
+  passwordHash String   @map("password_hash") @db.VarChar(255)
+  role         UserRole
+  isActive     Boolean  @default(true) @map("is_active")
+  createdAt    DateTime @default(now()) @map("created_at") @db.DateTime(6)
+  updatedAt    DateTime @updatedAt @map("updated_at") @db.DateTime(6)
+
+  rooms    RoomAdmin[]
+  sessions Session[]
+
+  @@index([role, isActive])
+  @@map("users")
+}
+
+// Room person-in-charge assignment (admin role only, enforced by the app); one room per admin, many admins per room.
+model RoomAdmin {
+  roomId    String   @map("room_id") @db.Char(36)
+  userId    String   @unique @map("user_id") @db.Char(36)
+  createdAt DateTime @default(now()) @map("created_at") @db.DateTime(6)
+
+  room Room @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([roomId, userId])
+  @@map("room_admins")
+}
+
+// Server-side login session; the cookie holds the raw token, only its SHA-256 hex is stored (ascii_bin in the migration SQL).
+model Session {
+  id        String   @id @default(uuid()) @db.Char(36)
+  userId    String   @map("user_id") @db.Char(36)
+  tokenHash String   @unique @map("token_hash") @db.Char(64)
+  expiresAt DateTime @map("expires_at") @db.DateTime(6)
+  createdAt DateTime @default(now()) @map("created_at") @db.DateTime(6)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  // Expired-session cleanup.
+  @@index([expiresAt])
+  @@map("sessions")
+}
+
+// Key-value app settings; values are strings ('true'/'false', decimal numbers), parsed by the app. key uses ascii_bin in the migration SQL.
+model AppSetting {
+  id    String @id @default(uuid()) @db.Char(36)
+  key   String @unique @db.VarChar(64)
+  // MEDIUMTEXT so a base64 logo (<= 512 KB raw) fits.
+  value String @db.MediumText
+
+  @@map("app_settings")
+}
+
+// Legacy single-row lock (ADR 0001), unused since ADR 0003; dropped in a later migration.
 model BookingLock {
   id Int @id @db.TinyInt
 

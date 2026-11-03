@@ -10,10 +10,10 @@ import { useConfirm } from './confirm-dialog';
 
 type Props = { entry: LogEntry; onClose: () => void };
 
-// Finished bookings: only name/division/agenda are editable; date & time are shown read-only.
+// Finished bookings: only name/satker/agenda are editable; date & time are shown read-only.
 export function EditPastBookingDialog({ entry, onClose }: Props) {
   const id = useId();
-  // Bound id is untrusted client input; the action re-checks admin + finished.
+  // Bound id is untrusted client input; the action re-checks access + finished.
   const [state, formAction, pending] = useActionState(
     updatePastBookingText.bind(null, entry.id),
     initialBookingFormState,
@@ -33,7 +33,7 @@ export function EditPastBookingDialog({ entry, onClose }: Props) {
     if (state.status === 'success') dialogRef.current?.close();
   }, [state.status]);
 
-  const initial = { bookerName: entry.bookerName, division: entry.division, agenda: entry.agenda };
+  const initial = { bookerName: entry.bookerName, satker: entry.satker, agenda: entry.agenda };
 
   const onSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();

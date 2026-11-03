@@ -3,41 +3,43 @@
 import { refresh } from 'next/cache';
 import { headers } from 'next/headers';
 
-import { Prisma } from '@/lib/generated/prisma/client';
-import { prisma } from '@/lib/prisma';
-import { isAdmin } from '@/lib/auth/session';
-import {
-  findBookingById,
-  findOverlap,
-  lockBookingWrites,
-  type OverlappingSlot,
-} from '@/lib/booking/queries';
+import { authorizeBooking, authorizeUser, canAccessRoom, getCurrentUser } from '@/lib/auth/access';
+import { findOverlap, lockRoomForWrite, type OverlappingSlot } from '@/lib/booking/queries';
 import { formatTimeRange, getBookingStatus } from '@/lib/booking/time';
-import { checkOfficeAccess } from '@/lib/office-access';
-import { generateAttendanceToken } from '@/lib/booking/attendance-token';
 import type { BookingFormState, CancelBookingResult } from '@/lib/booking/types';
-import {
-  isBookingId,
-  parseBookingInput,
-  readBookingValues,
-  type BookingValues,
-} from '@/lib/booking/validation';
+import { parseBookingInput, readBookingValues, type BookingValues } from '@/lib/booking/validation';
+import { checkOfficeAccess, getClientIpKey, isOfficeIp } from '@/lib/office-access';
+import { prisma } from '@/lib/prisma';
+import { consumePublicMutationQuota, rateLimitMessage } from '@/lib/rate-limit';
+import { RECAPTCHA_FAILED_MESSAGE, verifyRecaptcha } from '@/lib/recaptcha';
+import { ROOM_TX_OPTIONS } from '@/lib/room/lock';
+import { isUuid } from '@/lib/uuid';
 
-const PRISMA_RECORD_NOT_FOUND = 'P2025';
+const ROOM_UNAVAILABLE = 'Ruangan tidak tersedia.';
 
-// Lock-first write tx (ADR 0001); RC so the overlap check sees the previous holder's commit.
-const BOOKING_TX_OPTIONS = {
-  isolationLevel: Prisma.TransactionIsolationLevel.ReadCommitted,
-  maxWait: 5000,
-  timeout: 10000,
-};
+type TxOutcome = { kind: 'ok' } | { kind: 'clash'; slot: OverlappingSlot } | { kind: 'room' } | { kind: 'gone' };
 
+// Public (office network). `roomId` is bound on the server page; treat it as unknown at runtime.
+// FormData `recaptchaToken` (reCAPTCHA v3, action 'booking') when enabled. Per-IP limit unless the IP is on the
+// office allowlist or the request has a valid session.
 export async function createBooking(
+  roomId: string,
   _prevState: BookingFormState,
   formData: FormData,
 ): Promise<BookingFormState> {
-  if (!checkOfficeAccess(await headers()).allowed) {
-    return { status: 'error', message: 'Tidak diizinkan.', values: readBookingValues(formData) };
+  const values = readBookingValues(formData);
+  const h = await headers();
+  if (!(await checkOfficeAccess(h)).allowed) return { status: 'error', message: 'Tidak diizinkan.', values };
+  if (!isUuid(roomId)) return { status: 'error', message: ROOM_UNAVAILABLE, values };
+
+  if (!(await getCurrentUser()) && !(await isOfficeIp(h))) {
+    const ipKey = await getClientIpKey(h);
+    if (!ipKey) return { status: 'error', message: 'Tidak diizinkan.', values };
+    const quota = await consumePublicMutationQuota(ipKey, new Date());
+    if (!quota.ok) return { status: 'error', message: rateLimitMessage(quota.retryAfterMin), values };
+  }
+  if (!(await verifyRecaptcha(formData.get('recaptchaToken'), 'booking')).ok) {
+    return { status: 'error', message: RECAPTCHA_FAILED_MESSAGE, values };
   }
 
   const parsed = parseBookingInput(formData);
@@ -50,60 +52,78 @@ export async function createBooking(
     };
   }
 
-  const { startsAt, endsAt, bookerName, division, agenda } = parsed.data;
+  const { startsAt, endsAt, bookerName, satker, agenda } = parsed.data;
 
   try {
-    const clash = await prisma.$transaction(async (tx) => {
-      await lockBookingWrites(tx);
-      const found = await findOverlap(startsAt, endsAt, undefined, tx);
-      if (found) return found;
+    const outcome = await prisma.$transaction(async (tx): Promise<TxOutcome> => {
+      // Room lock serializes writes per room and checks active atomically (A3, C4/C5).
+      const room = (await lockRoomForWrite(tx, [roomId])).get(roomId);
+      if (!room || !room.isActive) return { kind: 'room' };
+      const slot = await findOverlap(room.id, startsAt, endsAt, undefined, tx);
+      if (slot) return { kind: 'clash', slot };
 
       // Explicit allowlist; never spread form data.
       await tx.booking.create({
-        data: { startsAt, endsAt, bookerName, division, agenda, attendanceToken: generateAttendanceToken() },
+        data: {
+          roomId: room.id,
+          startsAt,
+          endsAt,
+          bookerName,
+          satker,
+          agenda,
+        },
         select: { id: true },
       });
-      return null;
-    }, BOOKING_TX_OPTIONS);
-    if (clash) return overlapError(clash, readBookingValues(formData));
+      return { kind: 'ok' };
+    }, ROOM_TX_OPTIONS);
+    if (outcome.kind === 'room') return { status: 'error', message: ROOM_UNAVAILABLE, values };
+    if (outcome.kind === 'clash') return overlapError(outcome.slot, values);
   } catch (error) {
     console.error('[createBooking] failed to save booking', error);
-    return {
-      status: 'error',
-      message: 'Booking gagal disimpan. Silakan coba lagi.',
-      values: readBookingValues(formData),
-    };
+    return { status: 'error', message: 'Booking gagal disimpan. Silakan coba lagi.', values };
   }
 
   refresh();
   return { status: 'success', message: 'Booking berhasil disimpan.' };
 }
 
-// `id` is bound on the client: treat it as unknown at runtime.
+// Dashboard. `id` is bound on the client; optional form field `roomId` moves the booking (H3).
 export async function updateBooking(
   id: string,
   _prevState: BookingFormState,
   formData: FormData,
 ): Promise<BookingFormState> {
   const values = readBookingValues(formData);
-  const fail = (message: string): BookingFormState => ({ status: 'error', message, values });
+  const fail = (message: string, fieldErrors?: BookingFormState['fieldErrors']): BookingFormState => ({
+    status: 'error',
+    message,
+    fieldErrors,
+    values,
+  });
 
-  if (!checkOfficeAccess(await headers()).allowed) return fail('Tidak diizinkan.');
-  if (!(await isAdmin())) return fail('Tidak diizinkan.');
-  if (!isBookingId(id)) return fail('Booking tidak valid.');
+  const user = await authorizeUser();
+  if (!user) return fail('Tidak diizinkan.');
 
   let existing;
   try {
-    existing = await findBookingById(id);
+    existing = await authorizeBooking(user, id);
   } catch (error) {
     console.error('[updateBooking] failed to load booking', error);
     return fail('Booking gagal diperbarui. Silakan coba lagi.');
   }
-  if (!existing) return fail('Booking tidak ditemukan.');
+  // Missing and out-of-scope look the same (G4).
+  if (!existing) return fail('Tidak diizinkan.');
 
   const now = new Date();
   if (getBookingStatus(existing.startsAt, existing.endsAt, now) === 'done') {
     return fail('Booking yang sudah selesai tidak bisa diubah.');
+  }
+
+  const requestedRoom = (values.roomId ?? '').trim().toLowerCase();
+  const targetRoomId = requestedRoom === '' ? existing.roomId : requestedRoom;
+  const moving = targetRoomId !== existing.roomId;
+  if (moving && (!isUuid(targetRoomId) || !canAccessRoom(user, targetRoomId))) {
+    return fail('Periksa kembali isian formulir.', { roomId: 'Ruangan tidak valid.' });
   }
 
   const parsed = parseBookingInput(formData, now, { originalStartsAt: existing.startsAt });
@@ -116,26 +136,30 @@ export async function updateBooking(
     };
   }
 
-  const { startsAt, endsAt, bookerName, division, agenda } = parsed.data;
+  const { startsAt, endsAt, bookerName, satker, agenda } = parsed.data;
+  const sourceRoomId = existing.roomId;
 
   try {
-    const clash = await prisma.$transaction(async (tx) => {
-      await lockBookingWrites(tx);
-      const found = await findOverlap(startsAt, endsAt, id, tx);
-      if (found) return found;
+    const outcome = await prisma.$transaction(async (tx): Promise<TxOutcome> => {
+      // Source + target locked in id order (deadlock-safe).
+      const rooms = await lockRoomForWrite(tx, [sourceRoomId, targetRoomId]);
+      const target = rooms.get(targetRoomId);
+      // Moving needs an active target; staying in an inactive room is still manageable (A3).
+      if (!target || (moving && !target.isActive)) return { kind: 'room' };
+      const slot = await findOverlap(targetRoomId, startsAt, endsAt, id, tx);
+      if (slot) return { kind: 'clash', slot };
 
-      // Explicit allowlist; never spread form data.
-      await tx.booking.update({
-        where: { id },
-        data: { startsAt, endsAt, bookerName, division, agenda },
-        select: { id: true },
+      // Explicit allowlist; roomId guard catches a concurrent move.
+      const { count } = await tx.booking.updateMany({
+        where: { id, roomId: sourceRoomId },
+        data: { roomId: targetRoomId, startsAt, endsAt, bookerName, satker, agenda },
       });
-      return null;
-    }, BOOKING_TX_OPTIONS);
-    if (clash) return overlapError(clash, values);
+      return count === 1 ? { kind: 'ok' } : { kind: 'gone' };
+    }, ROOM_TX_OPTIONS);
+    if (outcome.kind === 'room') return fail(ROOM_UNAVAILABLE, { roomId: ROOM_UNAVAILABLE });
+    if (outcome.kind === 'clash') return overlapError(outcome.slot, values);
+    if (outcome.kind === 'gone') return fail('Booking tidak ditemukan.');
   } catch (error) {
-    // Deleted between the lookup and the update.
-    if (isRecordNotFound(error)) return fail('Booking tidak ditemukan.');
     console.error('[updateBooking] failed to update booking', error);
     return fail('Booking gagal diperbarui. Silakan coba lagi.');
   }
@@ -144,21 +168,20 @@ export async function updateBooking(
   return { status: 'success', message: 'Booking berhasil diperbarui.' };
 }
 
-// `id` comes from the client: treat it as unknown at runtime.
+// Dashboard. `id` comes from the client: treat it as unknown at runtime.
 export async function cancelBooking(id: string): Promise<CancelBookingResult> {
-  if (!checkOfficeAccess(await headers()).allowed) return { ok: false, message: 'Tidak diizinkan.' };
-  // Authorization is enforced here; hiding the button is UX only.
-  if (!(await isAdmin())) return { ok: false, message: 'Tidak diizinkan.' };
-  if (!isBookingId(id)) return { ok: false, message: 'Booking tidak valid.' };
+  const user = await authorizeUser();
+  if (!user) return { ok: false, message: 'Tidak diizinkan.' };
 
   try {
+    const existing = await authorizeBooking(user, id);
+    if (!existing) return { ok: false, message: 'Tidak diizinkan.' };
     // Finished bookings are kept for the reservation log; same rule as updateBooking.
-    const existing = await findBookingById(id);
-    if (existing && getBookingStatus(existing.startsAt, existing.endsAt, new Date()) === 'done') {
+    if (getBookingStatus(existing.startsAt, existing.endsAt, new Date()) === 'done') {
       return { ok: false, message: 'Booking yang sudah selesai tidak bisa dibatalkan.' };
     }
-    // Idempotent: deleting an already-removed booking still succeeds.
-    await prisma.booking.deleteMany({ where: { id } });
+    // roomId guard: a concurrent move out of scope is not deleted.
+    await prisma.booking.deleteMany({ where: { id: existing.id, roomId: existing.roomId } });
   } catch (error) {
     console.error('[cancelBooking] failed to delete booking', error);
     return { ok: false, message: 'Gagal membatalkan booking.' };
@@ -168,19 +191,13 @@ export async function cancelBooking(id: string): Promise<CancelBookingResult> {
   return { ok: true };
 }
 
-function overlapError(clash: OverlappingSlot | null, values: BookingValues): BookingFormState {
-  const slot = clash ? ` (${formatTimeRange(clash.startsAt, clash.endsAt)})` : '';
+function overlapError(clash: OverlappingSlot, values: BookingValues): BookingFormState {
   return {
     status: 'error',
     message: 'Jadwal bentrok dengan booking lain.',
-    fieldErrors: { startTime: `Ruangan sudah dibooking pada jam tersebut${slot}.` },
+    fieldErrors: {
+      startTime: `Ruangan sudah dibooking pada jam tersebut (${formatTimeRange(clash.startsAt, clash.endsAt)}).`,
+    },
     values,
   };
-}
-
-// Prisma 7 surfaces a missing update target as PrismaClientKnownRequestError code P2025.
-function isRecordNotFound(error: unknown): boolean {
-  return (
-    error instanceof Error && (error as { code?: unknown }).code === PRISMA_RECORD_NOT_FOUND
-  );
 }

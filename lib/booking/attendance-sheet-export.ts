@@ -9,10 +9,10 @@ import { pdfText } from '@/lib/booking/log-export';
 
 // Heavy libs: import this module dynamically from the export route only.
 
-const XLSX_WIDTHS = [5, 30, 28, 16, 12, 26];
-const XLSX_WRAP_COLS = [2, 3, 6];
+const XLSX_WIDTHS = [5, 28, 9, 26, 16, 12, 24];
+const XLSX_WRAP_COLS = [2, 4, 7];
 const XLSX_INFO_START = 3;
-// Approx. characters per line in the merged C:F info value.
+// Approx. characters per line in the merged C:G info value.
 const XLSX_INFO_CHARS = 80;
 const XLSX_LINE_HEIGHT = 15;
 
@@ -39,7 +39,7 @@ export async function buildAttendanceXlsx(sheet: AttendanceSheet): Promise<Uint8
     ws.getColumn(i + 1).width = width;
   });
 
-  ws.mergeCells('A1:F1');
+  ws.mergeCells('A1:G1');
   const title = ws.getCell('A1');
   title.value = sheet.title;
   title.font = { bold: true, size: 14 };
@@ -48,7 +48,7 @@ export async function buildAttendanceXlsx(sheet: AttendanceSheet): Promise<Uint8
   sheet.info.forEach(([label, value], i) => {
     const r = XLSX_INFO_START + i;
     ws.mergeCells(`A${r}:B${r}`);
-    ws.mergeCells(`C${r}:F${r}`);
+    ws.mergeCells(`C${r}:G${r}`);
     const labelCell = ws.getCell(`A${r}`);
     labelCell.value = label;
     labelCell.font = { bold: true };
@@ -74,7 +74,7 @@ export async function buildAttendanceXlsx(sheet: AttendanceSheet): Promise<Uint8
 
   const first = headerRow + 1;
   if (sheet.rows.length === 0) {
-    ws.mergeCells(`A${first}:F${first}`);
+    ws.mergeCells(`A${first}:G${first}`);
     const empty = ws.getCell(`A${first}`);
     empty.value = sheet.emptyText;
     empty.alignment = { horizontal: 'center' };
@@ -106,7 +106,7 @@ const PDF_INFO_SIZE = 10;
 const PDF_INFO_LABEL = 90;
 const PDF_INFO_COLON = 10;
 // Fractions of the usable width, one per column.
-const PDF_WIDTHS = [0.06, 0.26, 0.24, 0.14, 0.12, 0.18];
+const PDF_WIDTHS = [0.05, 0.22, 0.1, 0.21, 0.13, 0.11, 0.18];
 const SIGNATURE_FONT = 'Signature';
 const SIGNATURE_SIZE = 11;
 // Signature cells longer than this are clipped with an ellipsis.
