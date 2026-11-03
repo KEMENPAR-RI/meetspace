@@ -47,7 +47,7 @@ const PDF_SUB_INDENT = 16;
 const PDF_SUB_FONT = 8;
 
 // Standard Helvetica is WinAnsi-only: replace anything outside it with '?' instead of garbling.
-const pdfText = (s: string) =>
+export const pdfText = (s: string) =>
   s.normalize('NFC').replace(/[^\t\n\r\x20-\x7e\xa0-\xff€‚ƒ„…†‡ˆ‰Š‹ŒŽ‘’“”•–—˜™š›œžŸ]/gu, '?');
 
 // A4 landscape table with a repeated header; only standard fonts (no asset files needed).

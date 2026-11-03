@@ -13,6 +13,7 @@ const nextConfig: NextConfig = {
   serverExternalPackages: ["pdfkit", "mariadb", "@prisma/adapter-mariadb"],
   outputFileTracingIncludes: {
     "/api/log/export": ["./node_modules/pdfkit/js/data/**/*"],
+    "/api/rapat/[id]/export": ["./node_modules/pdfkit/js/data/**/*", "./app/fonts/signature.otf"],
   },
   cacheComponents: true,
   partialPrefetching: true,

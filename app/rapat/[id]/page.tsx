@@ -17,6 +17,7 @@ import { AttendanceForm } from '../../_components/attendance-form';
 import { AttendeeList } from '../../_components/attendee-list';
 import { BackLink } from '../../_components/back-link';
 import { CopyAttendanceLink } from '../../_components/copy-attendance-link';
+import { ExportButtons } from '../../_components/export-buttons';
 import { SiteHeader } from '../../_components/site-header';
 import { StatusBadge } from '../../_components/status-badge';
 
@@ -95,9 +96,19 @@ async function AttendanceContent({ params }: { params: Params }) {
         </p>
         {/* Plain text only; line breaks kept via CSS */}
         <p className="mt-2 whitespace-pre-line break-words text-sm text-zinc-700">{booking.agenda}</p>
-        {token && (
+        {(token || admin) && (
           <div className="mt-4 flex flex-wrap items-start gap-3 border-t border-zinc-100 pt-4">
-            <CopyAttendanceLink key={token} path={`/hadir/${token}`} />
+            {token && <CopyAttendanceLink key={token} path={`/hadir/${token}`} />}
+            {/* Admin-only, rendered server-side */}
+            {admin && (
+              <div className="sm:ml-auto">
+                <ExportButtons
+                  endpoint={`/api/rapat/${booking.id}/export`}
+                  searchParams=""
+                  label="Ekspor daftar hadir rapat ini"
+                />
+              </div>
+            )}
           </div>
         )}
       </section>
