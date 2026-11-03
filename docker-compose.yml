@@ -1,28 +1,41 @@
+# Host network: MySQL (aaPanel) listens on 127.0.0.1 of the host.
+x-common: &common
+  env_file: .env
+  network_mode: host
+  logging:
+    driver: json-file
+    options:
+      max-size: "10m"
+      max-file: "3"
+
 services:
+  # One-shot `prisma migrate deploy`; app restarts never rerun it.
+  migrate:
+    <<: *common
+    build:
+      context: .
+      target: migrate
+    image: booking-rapat-migrate:${APP_TAG:-latest}
+    restart: "no"
+    mem_limit: 256m
+    environment:
+      DB_HOST: 127.0.0.1
+
   app:
-    build: .
-    image: booking-rapat:latest
+    <<: *common
+    build:
+      context: .
+      target: runner
+    image: booking-rapat:${APP_TAG:-latest}
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
     restart: unless-stopped
     init: true
-    env_file: .env
-    environment:
-      # Overrides DB_HOST from .env; MySQL runs on the host, not in Docker.
-      DB_HOST: ${DOCKER_DB_HOST:-host.docker.internal}
-      NODE_OPTIONS: --max-old-space-size=384
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
-    # Loopback only: nginx is the sole entry point (X-Real-IP trust depends on it).
-    ports:
-      - "127.0.0.1:8282:8282"
     mem_limit: 512m
-    healthcheck:
-      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:'+(process.env.PORT||8282)+'/').then(r=>process.exit(r.status<500?0:1)).catch(()=>process.exit(1))"]
-      interval: 60s
-      timeout: 10s
-      retries: 3
-      start_period: 60s
-    logging:
-      driver: json-file
-      options:
-        max-size: "10m"
-        max-file: "3"
+    environment:
+      DB_HOST: 127.0.0.1
+      # Loopback only: nginx is the sole entry point (X-Real-IP trust depends on it).
+      HOSTNAME: 127.0.0.1
+      PORT: 8282
+      NODE_OPTIONS: --max-old-space-size=384

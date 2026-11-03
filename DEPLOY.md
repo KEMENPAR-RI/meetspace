@@ -6,7 +6,7 @@ Semua perintah dijalankan di VPS, di folder project.
 
 - Aplikasi jalan di dalam Docker.
 - MySQL tetap di luar Docker (MySQL bawaan aaPanel di `127.0.0.1`).
-- Tiap container start, migration (pembuatan tabel database) jalan otomatis.
+- Migration (pembuatan tabel database) jalan lewat service `migrate` sekali jalan, sebelum aplikasi start. Restart container aplikasi tidak menjalankan migration.
 - Aplikasi cuma bisa diakses dari `127.0.0.1:8282`. Publik masuk lewat nginx (domain di aaPanel).
 
 Cek dulu MySQL kamu:
@@ -15,7 +15,7 @@ Cek dulu MySQL kamu:
 sudo ss -ltnp | grep 3306
 ```
 
-Kalau hasilnya `127.0.0.1:3306`, ikuti panduan ini. Kalau `0.0.0.0:3306`, lihat juga [Lampiran](#lampiran-kalau-mysql-kamu-bukan-di-127001).
+Hasilnya harus ada `127.0.0.1:3306` (atau `0.0.0.0:3306`). Container memakai network host, jadi langsung terhubung ke MySQL di `127.0.0.1`.
 
 ## 2. Persiapan (sekali saja)
 
@@ -68,27 +68,32 @@ ADMIN_SESSION_SECRET="hasil-openssl-tadi"
 OFFICE_ALLOWED_IPS="203.0.113.10"
 TRUSTED_IP_HEADER="x-real-ip"
 OFFICE_IP_CHECK=true
-COMPOSE_FILE=docker-compose.yml:docker-compose.hostnet.yml
 ```
 
 - `OFFICE_ALLOWED_IPS`: IP kantor, pisahkan dengan koma. Kosong = semua orang ditolak.
-- `COMPOSE_FILE`: supaya cukup ketik `docker compose ...` tanpa `-f` (mode host network).
-- `DB_HOST` dan `DOCKER_DB_HOST` biarkan saja, Docker yang mengatur.
+- `DB_HOST` biarkan saja, Docker mengisinya `127.0.0.1`.
+- `COMPOSE_FILE` dan `DOCKER_DB_HOST` tidak dipakai lagi. Kalau ada di `.env`, hapus.
 - Kalau ada `DATABASE_URL` atau `DATABASE_URL_UNPOOLED`, hapus.
 
 ## 3. Deploy pertama
 
 ```sh
-docker compose up -d --build
+export APP_TAG=$(git rev-parse HEAD | cut -c1-7)
+docker compose build && docker compose run --rm migrate && docker compose up -d \
+  && sed -i -e '/^APP_TAG=/d' -e '$a\' .env && echo "APP_TAG=$APP_TAG" >> .env
 ```
+
+Image diberi tag commit (`APP_TAG`), lalu tag itu disimpan ke `.env` hanya kalau semua langkah berhasil.
 
 Cek hasilnya:
 
 ```sh
 docker compose ps                                  # tunggu sampai (healthy), kira-kira 1 menit
-docker compose logs app | grep -iE 'migrat|error'
-curl -I http://127.0.0.1:8282/
+docker compose run --rm migrate migrate status     # harus "Database schema is up to date!"
+curl -I http://127.0.0.1:8282/                     # 403 = normal kalau OFFICE_IP_CHECK=true
 ```
+
+`(healthy)` dan `403` hanya berarti aplikasi sudah listen, bukan berarti DB tersambung. Koneksi DB dicek lewat `migrate status` di atas. Hasil migration ada di output terminal (container `migrate` langsung dihapus).
 
 ## 4. Pasang domain di aaPanel
 
@@ -119,18 +124,39 @@ Data di database tetap aman.
 
 ```sh
 git pull
-docker compose up -d --build
+export APP_TAG=$(git rev-parse HEAD | cut -c1-7)
+docker compose build && docker compose run --rm migrate && docker compose up -d \
+  && sed -i -e '/^APP_TAG=/d' -e '$a\' .env && echo "APP_TAG=$APP_TAG" >> .env
 docker image prune -f
 ```
+
+Kalau migration gagal, perintah berhenti, aplikasi lama tetap jalan, dan `APP_TAG` di `.env` tidak berubah. `image prune -f` hanya menghapus image tanpa tag, jadi image versi sebelumnya tetap ada untuk rollback.
+
+Pertama kali update dari setup lama (yang memakai `docker-compose.hostnet.yml`), hapus dulu baris lama di `.env`:
+
+```sh
+sed -i '/^COMPOSE_FILE=/d; /^DOCKER_DB_HOST=/d' .env
+```
+
+Rollback ke versi sebelumnya (hanya kode; skema DB tidak ikut mundur, lihat Rollback database di bagian 7):
+
+```sh
+docker images booking-rapat                        # lihat tag yang tersedia
+sed -i 's/^APP_TAG=.*/APP_TAG=TAG_LAMA/' .env       # ganti TAG_LAMA
+docker compose up -d --no-build --no-deps app
+```
+
+Hapus image lama yang tidak dipakai lagi: `docker rmi booking-rapat:TAG booking-rapat-migrate:TAG`.
 
 ## 6. Kalau ada masalah
 
 | Error | Penyebab | Solusi |
 |---|---|---|
-| `P1001` / `migrate deploy failed` | Aplikasi tidak bisa menghubungi MySQL | Pastikan `COMPOSE_FILE` ada di `.env` dan MySQL jalan |
+| `stat ... docker-compose.hostnet.yml: no such file` | Baris `COMPOSE_FILE` lama masih di `.env` | Hapus baris itu (lihat bagian 5) |
+| `P1001` | Migration tidak bisa menghubungi MySQL | Pastikan MySQL jalan, lihat output terminal, cek ulang `docker compose run --rm migrate migrate status` |
 | `Access denied for user` | Password salah atau user belum dibuat | Cek `DB_PASSWORD`, ulangi bagian Database + user |
 | Build gagal / killed / out of memory | RAM kurang | Pasang swap (bagian 2) |
-| Container tidak `(healthy)` | Aplikasi gagal start | `docker compose logs app`, cocokkan dengan baris di atas |
+| Container tidak `(healthy)` | Aplikasi gagal start (`(healthy)` tidak mengecek DB) | `docker compose logs app`, cocokkan dengan baris di atas |
 
 ## 7. Perintah berguna
 
@@ -139,44 +165,25 @@ docker compose logs -f app       # lihat log langsung
 docker compose restart app       # restart aplikasi
 
 # cek / jalankan migration manual
-docker compose exec app sh -c 'cd /migrate && node node_modules/prisma/build/index.js migrate status'
-docker compose exec app sh -c 'cd /migrate && node node_modules/prisma/build/index.js migrate deploy'
-
-# kalau container restart terus (exec tidak bisa)
-docker compose run --rm --entrypoint sh app -c 'cd /migrate && node node_modules/prisma/build/index.js migrate status'
+docker compose run --rm migrate migrate status
+docker compose run --rm migrate
 ```
 
-Rollback database. **Awas: semua tabel dan data booking terhapus.**
+Rollback database: jalankan `down.sql` dari migration terbaru mundur ke yang ingin dibatalkan (urutan terbalik). Contoh batalkan migration terakhir saja:
 
 ```sh
-docker compose exec app sh -c 'cd /migrate && node node_modules/prisma/build/index.js db execute --file prisma/migrations/20261028000000_init_mysql/down.sql'
+docker compose run --rm migrate db execute --file prisma/migrations/20261029000000_public_attendance/down.sql
 ```
 
-## Lampiran: kalau MySQL kamu bukan di 127.0.0.1
+Rollback penuh, urutan terbalik. **Awas: semua tabel dan data booking terhapus.**
 
-Mode bridge (jaringan Docker terpisah). Bedanya dengan panduan di atas:
-
-1. Di `.env` hapus baris `COMPOSE_FILE`.
-2. User database pakai `'booking'@'172.%'`, bukan localhost/127.0.0.1:
-   ```sql
-   CREATE USER 'booking'@'172.%' IDENTIFIED BY 'PASSWORD_KUAT';
-   GRANT ALL PRIVILEGES ON booking_rapat.* TO 'booking'@'172.%';
-   FLUSH PRIVILEGES;
-   ```
-3. Di config MySQL (`/etc/my.cnf`), bagian `[mysqld]`: `bind-address = 0.0.0.0`, lalu:
-   ```sh
-   sudo systemctl restart mysqld || sudo systemctl restart mysql
-   ```
-4. Firewall wajib, supaya port 3306 tidak terbuka ke internet:
-   ```sh
-   sudo ufw allow from 172.16.0.0/12 to any port 3306 proto tcp
-   sudo ufw deny 3306/tcp
-   sudo ufw status numbered      # harus "Status: active"
-   ```
-   Cek juga di aaPanel > Security: port 3306 jangan dibuka ke publik.
+```sh
+for m in $(ls -r prisma/migrations | grep -E '^[0-9]'); do
+  docker compose run --rm migrate db execute --file prisma/migrations/$m/down.sql || break
+done
+```
 
 ## Catatan keamanan
 
 - Jangan commit atau bagikan `.env`.
-- Di mode bridge, pakai Docker versi 28 ke atas.
 - Pertimbangkan `limit_req` (pembatas jumlah request) di nginx untuk halaman login admin.

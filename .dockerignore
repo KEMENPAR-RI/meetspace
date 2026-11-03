@@ -19,6 +19,5 @@ Dockerfile
 docker-compose.yml
 .dockerignore
 README.md
-docker-compose.hostnet.yml
 .flyenv
 app/fonts/priestacy/*.pdf
