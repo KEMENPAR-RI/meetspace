@@ -4,6 +4,7 @@ import { io } from 'next/cache';
 import { cookies } from 'next/headers';
 import { unstable_rethrow } from 'next/navigation';
 
+import { shouldUseSecureCookie } from '@/lib/auth/cookie-secure';
 import type { Prisma } from '@/lib/generated/prisma/client';
 import { prisma } from '@/lib/prisma';
 import { getAppSettings } from '@/lib/settings/queries';
@@ -49,7 +50,7 @@ export async function setDeviceCookie(raw: string): Promise<void> {
   cookieStore.set(DEVICE_COOKIE, raw, {
     httpOnly: true,
     sameSite: 'lax',
-    secure: process.env.NODE_ENV === 'production',
+    secure: await shouldUseSecureCookie(),
     path: '/',
     maxAge: DEVICE_COOKIE_MAX_AGE_S,
   });

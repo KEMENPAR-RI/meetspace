@@ -66,7 +66,7 @@ APP_URL="https://rapat.example.go.id"
 NEXT_PUBLIC_APP_MAINTAINER=APJAR
 ```
 
-- `APP_URL`: alamat publik (domain di bagian 4), tanpa path. Dipakai untuk QR dan link. Kosong = QR nonaktif.
+- `APP_URL`: alamat publik (domain di bagian 4), tanpa path. Dipakai untuk QR dan link. Kosong = QR nonaktif. Skema (`http://` atau `https://`) juga menentukan flag `Secure` pada cookie login bila reverse proxy tidak mengirim `X-Forwarded-Proto`. Dengan `https://`, aplikasi wajib diakses lewat HTTPS; dengan `http://`, cookie dikirim tanpa `Secure` (kurang aman, hanya untuk intranet).
 - Batas login, cek IP kantor, header IP, dan maks peserta tidak lagi di `.env`. Semua diatur superadmin di `/dashboard/pengaturan` (disimpan di DB). Default: login 10x/username dan 50x/IP per 15 menit, cek IP kantor nonaktif, header `x-real-ip`, maks 200 peserta.
 - `NEXT_PUBLIC_APP_MAINTAINER`: nama pengelola di halaman error. Nilainya tertanam saat build: setelah diubah wajib `docker compose build` ulang (restart saja tidak cukup). Kosong = `APJAR`.
 - `DB_HOST` biarkan saja, Docker mengisinya `127.0.0.1`.

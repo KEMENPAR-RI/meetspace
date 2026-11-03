@@ -2,6 +2,7 @@ import { io } from 'next/cache';
 import { cookies } from 'next/headers';
 import { unstable_rethrow } from 'next/navigation';
 
+import { shouldUseSecureCookie } from './cookie-secure';
 import { deleteSessionByToken, insertSession, pruneExpiredSessions, SESSION_TTL_MS } from './session-store';
 
 // Cookie side of DB sessions. Server-only by convention: never import from a client component.
@@ -34,7 +35,7 @@ export async function createSession(userId: string): Promise<void> {
   cookieStore.set(SESSION_COOKIE, token, {
     httpOnly: true,
     sameSite: 'lax',
-    secure: process.env.NODE_ENV === 'production',
+    secure: await shouldUseSecureCookie(),
     path: '/',
     maxAge: SESSION_TTL_MS / 1000,
   });
