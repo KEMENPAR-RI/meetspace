@@ -1,5 +1,6 @@
 import { Suspense } from 'react';
 import type { Metadata } from 'next';
+import { UserPlus } from 'lucide-react';
 import { createUser } from '@/app/actions/user';
 import { requireSuperadmin } from '@/lib/auth/access';
 import { BackLink } from '@/app/_components/back-link';
@@ -21,7 +22,7 @@ async function NewUserContent() {
   return (
     <div className="mx-auto max-w-xl">
       <BackLink href="/dashboard/akun">Akun</BackLink>
-      <PageHeader title="Tambah Akun" description="Penanggung jawab ruangan ditetapkan dari halaman ruangan." />
+      <PageHeader title="Tambah Akun" icon={<UserPlus />} description="Penanggung jawab ruangan ditetapkan dari halaman ruangan." />
       <section className={cardClass}>
         <UserForm action={createUser} mode="create" />
       </section>

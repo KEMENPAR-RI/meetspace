@@ -3,6 +3,7 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { io } from 'next/cache';
+import { CalendarX2, History } from 'lucide-react';
 import { getRecentPastBookings } from '@/lib/booking/queries';
 import { findPublicRoomById } from '@/lib/room/queries';
 import { formatDateLabel, formatTimeRange, getBookingStatus } from '@/lib/booking/time';
@@ -45,7 +46,8 @@ async function PastMeetings({ params }: { params: Params }) {
   return (
     <>
       <BackLink href={`/ruang/${room.id}`}>Kembali ke {room.name}</BackLink>
-      <h2 id="past-heading" className="mt-1 text-2xl font-semibold tracking-tight text-primary">
+      <h2 id="past-heading" className="mt-1 flex items-center gap-2 text-2xl font-semibold tracking-tight text-primary">
+        <History className="size-6" />
         Rapat Sebelumnya
       </h2>
       <p className="mt-1 mb-6 text-sm text-zinc-600">
@@ -54,6 +56,7 @@ async function PastMeetings({ params }: { params: Params }) {
 
       {bookings.length === 0 ? (
         <p className="rounded-xl border border-dashed border-zinc-300 px-4 py-10 text-center text-sm text-zinc-500">
+          <CalendarX2 className="mx-auto mb-2 block size-6 text-zinc-400" />
           Tidak ada rapat dalam 30 hari terakhir.
         </p>
       ) : (

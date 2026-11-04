@@ -1,6 +1,7 @@
 'use client';
 
 import { useActionState, useEffect, useRef, useState } from 'react';
+import { LoaderCircle, Palette, Save, Trash2 } from 'lucide-react';
 import { updateAppearance } from '@/app/actions/settings';
 import { initialFormState } from '@/lib/auth/types';
 import {
@@ -70,7 +71,10 @@ export function AppearanceForm({ initial }: { initial: Initial }) {
   return (
     <form action={formAction} className={`${cardClass} space-y-5`} aria-labelledby="sec-appearance">
       <div>
-        <h2 id="sec-appearance" className="text-base font-semibold text-primary">Tampilan</h2>
+        <h2 id="sec-appearance" className="flex items-center gap-2 text-base font-semibold text-primary">
+          <Palette className="size-5" />
+          Tampilan
+        </h2>
         <p className="mt-1 text-sm text-zinc-600">Nama, logo, dan warna utama di halaman publik dan dashboard.</p>
       </div>
 
@@ -131,6 +135,7 @@ export function AppearanceForm({ initial }: { initial: Initial }) {
             </p>
             {(initial.logoUrl || preview) && !removeLogo && (
               <button type="button" onClick={clearLogo} className={secondaryButton}>
+                <Trash2 className="size-4" />
                 Hapus logo
               </button>
             )}
@@ -188,6 +193,7 @@ export function AppearanceForm({ initial }: { initial: Initial }) {
 
       <div className="flex justify-end border-t border-zinc-100 pt-5">
         <button type="submit" disabled={pending || Boolean(fileError)} className={primaryButton}>
+          {pending ? <LoaderCircle className="size-4 motion-safe:animate-spin" /> : <Save className="size-4" />}
           {pending ? 'Menyimpan…' : 'Simpan Tampilan'}
         </button>
       </div>

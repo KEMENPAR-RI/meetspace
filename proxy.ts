@@ -22,8 +22,9 @@ export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
   // POST is needed for Server Actions; public actions re-check office access, dashboard ones check the session/role.
   if (isPublicAttendancePath(pathname) && PUBLIC_METHODS.has(request.method)) {
-    // Mutations (POST) are rate limited inside the actions.
-    if (PAGE_METHODS.has(request.method)) {
+    // Server Action POSTs (next-action header) are rate limited inside the actions; a plain POST renders the
+    // page like a GET, so it counts here too (no 405: no-JS action submits carry no next-action header).
+    if (PAGE_METHODS.has(request.method) || !request.headers.has('next-action')) {
       const retryAfterS = await publicPageRetryAfter(request);
       if (retryAfterS !== null) {
         return new Response(TOO_MANY_HTML, {

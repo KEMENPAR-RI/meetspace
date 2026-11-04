@@ -1,6 +1,7 @@
 import { Suspense } from 'react';
 import type { Metadata } from 'next';
 import { io } from 'next/cache';
+import { ClipboardList, ListFilter } from 'lucide-react';
 import { isSuperadmin, requireUser } from '@/lib/auth/access';
 import { LOG_MAX_ROWS } from '@/lib/booking/log';
 import { loadDashboardLog } from '@/lib/booking/log-loader';
@@ -39,6 +40,7 @@ async function LogContent({ searchParams }: { searchParams: SearchParams }) {
       <PageHeader
         eyebrow="Log"
         title="Log Reservasi"
+        icon={<ClipboardList />}
         actions={
           <>
             <ExportButtons searchParams={query} disabled={truncated} />
@@ -55,6 +57,7 @@ async function LogContent({ searchParams }: { searchParams: SearchParams }) {
           role="status"
           className="rounded-xl border border-dashed border-zinc-300 bg-white px-4 py-6 text-center text-sm text-zinc-500"
         >
+          <ListFilter className="mx-auto mb-2 block size-6 text-zinc-400" />
           Data terlalu banyak (lebih dari {LOG_MAX_ROWS} reservasi). Persempit filter untuk menampilkan log.
         </p>
       ) : (

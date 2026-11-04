@@ -1,3 +1,4 @@
+import { UserRoundX, Users } from 'lucide-react';
 import { signatureFont } from '@/app/fonts/signature';
 import { attendeeRoleLabel, genderLabel, type Attendee } from '@/lib/booking/types';
 import { DeleteAttendeeButton } from './delete-attendee-button';
@@ -16,7 +17,8 @@ export function AttendeeList({
   return (
     <section aria-labelledby="attendees-heading">
       <div className="mb-4 flex items-baseline justify-between gap-3">
-        <h2 id="attendees-heading" className="text-lg font-semibold text-primary">
+        <h2 id="attendees-heading" className="flex items-center gap-2 text-lg font-semibold text-primary">
+          <Users className="size-5" />
           Peserta
         </h2>
         <p className="rounded-full bg-secondary/40 px-2.5 py-0.5 text-xs font-semibold tabular-nums text-primary">
@@ -26,6 +28,7 @@ export function AttendeeList({
 
       {attendees.length === 0 ? (
         <p className="rounded-xl border border-dashed border-zinc-300 px-4 py-10 text-center text-sm text-zinc-500">
+          <UserRoundX className="mx-auto mb-2 block size-6 text-zinc-400" />
           Belum ada peserta yang mengisi daftar hadir.
         </p>
       ) : (

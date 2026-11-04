@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { CircleAlert, Download, LoaderCircle, QrCode, RotateCw, TriangleAlert, X } from 'lucide-react';
 import { CopyAttendanceLink } from '@/app/_components/copy-attendance-link';
 import { primaryButton, secondaryButton, smallButton } from './ui';
 
@@ -31,7 +32,7 @@ export function QrButton({ label, triggerAriaLabel, size = 'sm', ...dialog }: Pr
         aria-label={triggerAriaLabel}
         className={size === 'sm' ? smallButton : secondaryButton}
       >
-        <QrIcon />
+        <QrIcon className={size === 'sm' ? 'size-3.5' : 'size-4'} />
         {label}
       </button>
       {/* Mounted on demand: each open fetches a fresh image. */}
@@ -152,9 +153,7 @@ function QrDialog({
           aria-label="Tutup"
           className="-m-1 rounded-md p-1 text-zinc-500 hover:bg-zinc-100 hover:text-zinc-800 focus-visible:outline-2 focus-visible:outline-primary"
         >
-          <svg aria-hidden="true" viewBox="0 0 20 20" fill="currentColor" className="size-5">
-            <path d="M6.28 5.22a.75.75 0 0 0-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 1 0 1.06 1.06L10 11.06l3.72 3.72a.75.75 0 1 0 1.06-1.06L11.06 10l3.72-3.72a.75.75 0 0 0-1.06-1.06L10 8.94 6.28 5.22Z" />
-          </svg>
+          <X className="size-5" />
         </button>
       </div>
 
@@ -181,22 +180,30 @@ function QrDialog({
 
       <div className="mt-4 space-y-3" aria-live="polite">
         {status === 'unconfigured' && (
-          <p role="alert" className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900">
-            <span className="font-semibold">URL publik belum dikonfigurasi.</span> Minta operator server mengisi{' '}
-            <code className="font-mono text-xs">APP_URL</code> agar QR mengarah ke alamat yang benar.
+          <p role="alert" className="flex items-start gap-2 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+            <TriangleAlert className="mt-0.5 size-4 shrink-0 text-amber-600" />
+            <span className="min-w-0">
+              <span className="font-semibold">URL publik belum dikonfigurasi.</span> Minta operator server mengisi{' '}
+              <code className="font-mono text-xs">APP_URL</code> agar QR mengarah ke alamat yang benar.
+            </span>
           </p>
         )}
         {status === 'denied' && (
-          <p role="alert" className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">
-            Tidak diizinkan atau data tidak ditemukan.
+          <p role="alert" className="flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">
+            <CircleAlert className="mt-0.5 size-4 shrink-0" />
+            <span className="min-w-0">Tidak diizinkan atau data tidak ditemukan.</span>
           </p>
         )}
         {status === 'error' && (
-          <div role="alert" className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">
-            Gagal memuat QR code.{' '}
-            <button type="button" onClick={retry} className="font-semibold underline underline-offset-2">
-              Coba lagi
-            </button>
+          <div role="alert" className="flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">
+            <CircleAlert className="mt-0.5 size-4 shrink-0" />
+            <span className="min-w-0">
+              Gagal memuat QR code.{' '}
+              <button type="button" onClick={retry} className="inline-flex items-center gap-1 font-semibold underline underline-offset-2">
+                <RotateCw className="size-3.5" />
+                Coba lagi
+              </button>
+            </span>
           </div>
         )}
 
@@ -221,10 +228,7 @@ function QrDialog({
         </button>
         {status === 'ready' && (
           <button type="button" onClick={downloadPng} disabled={downloading} className={primaryButton}>
-            <svg aria-hidden="true" viewBox="0 0 20 20" fill="currentColor" className="size-4">
-              <path d="M10.75 2.75a.75.75 0 0 0-1.5 0v8.614L6.295 8.235a.75.75 0 1 0-1.09 1.03l4.25 4.5a.75.75 0 0 0 1.09 0l4.25-4.5a.75.75 0 0 0-1.09-1.03l-2.955 3.129V2.75Z" />
-              <path d="M3.5 12.75a.75.75 0 0 0-1.5 0v2.5A2.75 2.75 0 0 0 4.75 18h10.5A2.75 2.75 0 0 0 18 15.25v-2.5a.75.75 0 0 0-1.5 0v2.5c0 .69-.56 1.25-1.25 1.25H4.75c-.69 0-1.25-.56-1.25-1.25v-2.5Z" />
-            </svg>
+            {downloading ? <LoaderCircle className="size-4 motion-safe:animate-spin" /> : <Download className="size-4" />}
             {downloading ? 'Menyiapkan…' : 'Unduh PNG'}
           </button>
         )}
@@ -239,13 +243,5 @@ function QrDialog({
 }
 
 function QrIcon({ className = 'size-4' }: { className?: string }) {
-  return (
-    <svg aria-hidden="true" viewBox="0 0 20 20" fill="currentColor" className={className}>
-      <path
-        fillRule="evenodd"
-        d="M3 4.25C3 3.56 3.56 3 4.25 3h3.5C8.44 3 9 3.56 9 4.25v3.5C9 8.44 8.44 9 7.75 9h-3.5C3.56 9 3 8.44 3 7.75v-3.5Zm1.5.25v3h3v-3h-3ZM11 4.25c0-.69.56-1.25 1.25-1.25h3.5c.69 0 1.25.56 1.25 1.25v3.5C17 8.44 16.44 9 15.75 9h-3.5C11.56 9 11 8.44 11 7.75v-3.5Zm1.5.25v3h3v-3h-3ZM3 12.25c0-.69.56-1.25 1.25-1.25h3.5c.69 0 1.25.56 1.25 1.25v3.5C9 16.44 8.44 17 7.75 17h-3.5C3.56 17 3 16.44 3 15.75v-3.5Zm1.5.25v3h3v-3h-3ZM11 11.75a.75.75 0 0 1 .75-.75h1.5a.75.75 0 0 1 0 1.5h-.75v.75a.75.75 0 0 1-1.5 0v-1.5ZM15.75 11a.75.75 0 0 1 .75.75v.5a.75.75 0 0 1-1.5 0v-.5a.75.75 0 0 1 .75-.75ZM11.75 15.5a.75.75 0 0 1 .75.75v.5a.75.75 0 0 1-1.5 0v-.5a.75.75 0 0 1 .75-.75ZM14.25 14a.75.75 0 0 1 .75.75v.5h.75a.75.75 0 0 1 0 1.5h-1.5a.75.75 0 0 1-.75-.75v-1.25a.75.75 0 0 1 .75-.75Z"
-        clipRule="evenodd"
-      />
-    </svg>
-  );
+  return <QrCode className={className} />;
 }

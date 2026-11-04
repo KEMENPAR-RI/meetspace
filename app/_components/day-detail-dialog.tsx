@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState, useTransition } from 'react';
 import Link from 'next/link';
+import { CalendarX2, Trash2, X } from 'lucide-react';
 import { cancelBooking } from '@/app/actions/booking';
 import { deletePastBooking } from '@/app/actions/log';
 import type { LogDay, LogEntry } from '@/lib/booking/log';
@@ -71,14 +72,13 @@ export function DayDetailDialog({ day, rooms, onClose }: Props) {
           aria-label="Tutup"
           className="-m-1 rounded-md p-1 text-zinc-500 hover:bg-zinc-100 hover:text-zinc-800 focus-visible:outline-2 focus-visible:outline-primary"
         >
-          <svg aria-hidden="true" viewBox="0 0 20 20" fill="currentColor" className="size-5">
-            <path d="M6.28 5.22a.75.75 0 0 0-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 1 0 1.06 1.06L10 11.06l3.72 3.72a.75.75 0 1 0 1.06-1.06L11.06 10l3.72-3.72a.75.75 0 0 0-1.06-1.06L10 8.94 6.28 5.22Z" />
-          </svg>
+          <X className="size-5" />
         </button>
       </div>
 
       {entries.length === 0 ? (
         <p className="rounded-xl border border-dashed border-zinc-300 px-4 py-6 text-center text-sm text-zinc-500">
+          <CalendarX2 className="mx-auto mb-2 block size-6 text-zinc-400" />
           Tidak ada reservasi pada tanggal ini
         </p>
       ) : (
@@ -224,8 +224,9 @@ function DeleteEntryButton({
         onClick={onClick}
         disabled={pending}
         aria-label={pending ? 'Menghapus reservasi' : label}
-        className="rounded-md border border-red-300 bg-white px-2.5 py-1 text-xs font-medium text-red-700 hover:bg-red-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-600 disabled:cursor-not-allowed disabled:opacity-60 motion-safe:transition-colors"
+        className="inline-flex items-center gap-1 rounded-md border border-red-300 bg-white px-2.5 py-1 text-xs font-medium text-red-700 hover:bg-red-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-600 disabled:cursor-not-allowed disabled:opacity-60 motion-safe:transition-colors"
       >
+        <Trash2 className="size-3.5" />
         {pending ? 'Menghapus…' : 'Hapus'}
       </button>
       {error && (

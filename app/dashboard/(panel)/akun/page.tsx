@@ -1,6 +1,7 @@
 import { Suspense } from 'react';
 import type { Metadata } from 'next';
 import Link from 'next/link';
+import { Pencil, UserPlus, Users } from 'lucide-react';
 import { io } from 'next/cache';
 import { isSuperadmin, requireSuperadmin } from '@/lib/auth/access';
 import { USER_ROLE_LABELS } from '@/lib/auth/types';
@@ -28,14 +29,16 @@ async function UsersContent() {
         eyebrow="Kelola"
         title="Akun"
         description="Akun pengelola dashboard dan ruangan yang menjadi tanggung jawabnya."
+        icon={<Users />}
         actions={
           <Link href="/dashboard/akun/baru" className={primaryButton}>
-            + Tambah akun
+            <UserPlus className="size-4" />
+            Tambah akun
           </Link>
         }
       />
       {users.length === 0 ? (
-        <EmptyState>Belum ada akun.</EmptyState>
+        <EmptyState icon={<Users />}>Belum ada akun.</EmptyState>
       ) : (
         <div className="overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-sm">
           <table className="w-full text-left text-sm">
@@ -76,6 +79,7 @@ async function UsersContent() {
                   </td>
                   <td className="col-start-2 row-start-1 justify-self-end md:px-4 md:py-3 md:text-right">
                     <Link href={`/dashboard/akun/${u.id}`} className={smallButton} aria-label={`Edit akun ${u.name}`}>
+                      <Pencil className="size-3.5" />
                       Edit
                     </Link>
                   </td>

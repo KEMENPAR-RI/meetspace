@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
+import { CircleAlert, Power, PowerOff, Trash2 } from 'lucide-react';
 import { deleteRoom, setRoomActive } from '@/app/actions/room';
 import { useConfirm } from '@/app/_components/confirm-dialog';
 import { dangerButton, secondaryButton } from './ui';
@@ -71,6 +72,7 @@ export function RoomActions({
     <div className="space-y-3">
       <div className="flex flex-wrap gap-2">
         <button type="button" onClick={toggle} disabled={pending} className={isActive ? dangerButton : secondaryButton}>
+          {isActive ? <PowerOff className="size-4" /> : <Power className="size-4" />}
           {isActive ? 'Nonaktifkan' : 'Aktifkan'}
         </button>
         <button
@@ -80,6 +82,7 @@ export function RoomActions({
           aria-describedby={hasBookings ? 'delete-room-hint' : undefined}
           className={dangerButton}
         >
+          <Trash2 className="size-4" />
           Hapus ruangan
         </button>
       </div>
@@ -89,8 +92,9 @@ export function RoomActions({
         </p>
       )}
       {error && (
-        <p role="alert" className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">
-          {error}
+        <p role="alert" className="flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">
+          <CircleAlert className="mt-0.5 size-4 shrink-0" />
+          <span className="min-w-0">{error}</span>
         </p>
       )}
       {confirmDialog}

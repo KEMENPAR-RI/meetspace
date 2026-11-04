@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import { io } from 'next/cache';
+import { CalendarX2 } from 'lucide-react';
 import { getUpcomingBookings } from '@/lib/booking/queries';
 import { formatDateLabel, formatTimeRange, getBookingStatus } from '@/lib/booking/time';
 import { StatusBadge } from './status-badge';
@@ -14,6 +15,7 @@ export async function BookingList({ roomId }: { roomId: string }) {
   if (bookings.length === 0) {
     return (
       <p className="rounded-xl border border-dashed border-zinc-300 px-4 py-10 text-center text-sm text-zinc-500">
+        <CalendarX2 className="mx-auto mb-2 block size-6 text-zinc-400" />
         Belum ada booking mendatang di ruangan ini
       </p>
     );

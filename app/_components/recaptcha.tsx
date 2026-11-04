@@ -2,6 +2,7 @@
 
 import { startTransition, useCallback } from 'react';
 import Script from 'next/script';
+import type { RecaptchaAction } from '@/lib/recaptcha';
 
 type Grecaptcha = {
   ready: (callback: () => void) => void;
@@ -13,8 +14,6 @@ declare global {
     grecaptcha?: Grecaptcha;
   }
 }
-
-export type RecaptchaAction = 'attendance' | 'booking' | 'login';
 
 const LOAD_TIMEOUT_MS = 10_000;
 const EXECUTE_TIMEOUT_MS = 10_000;

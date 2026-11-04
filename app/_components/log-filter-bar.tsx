@@ -3,6 +3,7 @@
 import { useState, useTransition } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import { ListFilter, LoaderCircle, RotateCcw } from 'lucide-react';
 import type { LogFilters } from '@/lib/booking/log';
 import { BOOKING_LIMITS } from '@/lib/booking/types';
 
@@ -157,15 +158,17 @@ function FilterForm({ value, satkers, rooms }: Props) {
         )}
         <Link
           href={BASE_PATH}
-          className="inline-flex items-center justify-center rounded-lg border border-zinc-300 bg-white px-4 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary motion-safe:transition-colors"
+          className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-zinc-300 bg-white px-4 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary motion-safe:transition-colors"
         >
+          <RotateCcw className="size-4" />
           Reset
         </Link>
         <button
           type="submit"
           disabled={pending}
-          className="inline-flex items-center justify-center rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-primary/90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary disabled:cursor-not-allowed disabled:opacity-60 motion-safe:transition-colors"
+          className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-primary/90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary disabled:cursor-not-allowed disabled:opacity-60 motion-safe:transition-colors"
         >
+          {pending ? <LoaderCircle className="size-4 motion-safe:animate-spin" /> : <ListFilter className="size-4" />}
           {pending ? 'Memuat…' : 'Terapkan'}
         </button>
       </div>

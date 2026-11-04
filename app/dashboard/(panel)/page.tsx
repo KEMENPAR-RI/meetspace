@@ -1,6 +1,7 @@
 import { Suspense } from 'react';
 import type { Metadata } from 'next';
 import Link from 'next/link';
+import { ArrowRight, Building2, CalendarCheck, CalendarX2, DoorClosed, LayoutDashboard } from 'lucide-react';
 import { io } from 'next/cache';
 import { getRoomScope, isSuperadmin, requireUser } from '@/lib/auth/access';
 import { loadAdminHome } from '@/lib/booking/admin-home';
@@ -35,11 +36,11 @@ async function Overview() {
     const home = await loadAdminHome(user, now);
     return (
       <>
-        <PageHeader eyebrow="Ringkasan" title={`Halo, ${user.name}`} />
+        <PageHeader eyebrow="Ringkasan" title={`Halo, ${user.name}`} icon={<LayoutDashboard />} />
         {home ? (
           <AdminHome data={home} now={now} />
         ) : (
-          <EmptyState>Anda belum ditugaskan ke ruangan. Hubungi superadmin.</EmptyState>
+          <EmptyState icon={<DoorClosed />}>Anda belum ditugaskan ke ruangan. Hubungi superadmin.</EmptyState>
         )}
       </>
     );
@@ -53,15 +54,17 @@ async function Overview() {
         eyebrow="Ringkasan"
         title={`Halo, ${user.name}`}
         description="Anda mengelola semua ruangan."
+        icon={<LayoutDashboard />}
       />
 
       <div className="grid grid-cols-1 gap-8 xl:grid-cols-[minmax(0,1fr)_22rem] xl:items-start">
         <section aria-labelledby="rooms-heading">
-          <h2 id="rooms-heading" className="mb-3 text-lg font-semibold text-primary">
+          <h2 id="rooms-heading" className="mb-3 flex items-center gap-2 text-lg font-semibold text-primary">
+            <Building2 className="size-5" />
             Ruangan
           </h2>
           {rooms.length === 0 ? (
-            <EmptyState>
+            <EmptyState icon={<DoorClosed />}>
               {superadmin ? (
                 <>
                   Belum ada ruangan.{' '}
@@ -83,11 +86,15 @@ async function Overview() {
         </section>
 
         <section aria-labelledby="today-heading" className={cardClass}>
-          <h2 id="today-heading" className="text-lg font-semibold text-primary">
+          <h2 id="today-heading" className="flex items-center gap-2 text-lg font-semibold text-primary">
+            <CalendarCheck className="size-5" />
             Rapat hari ini
           </h2>
           {todays.length === 0 ? (
-            <p className="mt-3 text-sm text-zinc-500">Tidak ada rapat hari ini.</p>
+            <p className="mt-3 flex items-center gap-2 text-sm text-zinc-500">
+              <CalendarX2 className="size-4 shrink-0 text-zinc-400" />
+              Tidak ada rapat hari ini.
+            </p>
           ) : (
             <ul className="mt-3 divide-y divide-zinc-100">
               {todays.map((b) => (
@@ -117,9 +124,10 @@ async function Overview() {
           )}
           <Link
             href="/dashboard/booking"
-            className="mt-4 inline-flex rounded text-sm font-medium text-primary hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+            className="mt-4 inline-flex items-center gap-1 rounded text-sm font-medium text-primary hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
           >
-            Semua booking mendatang →
+            Semua booking mendatang
+            <ArrowRight className="size-4" />
           </Link>
         </section>
       </div>

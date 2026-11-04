@@ -2,6 +2,7 @@
 
 import { useActionState } from 'react';
 import { useFormStatus } from 'react-dom';
+import { CalendarPlus, CircleAlert, CircleCheck, LoaderCircle } from 'lucide-react';
 import { initialBookingFormState, type BookingFormState } from '@/lib/booking/types';
 import { BookingFields } from './booking-fields';
 import { RecaptchaNotice, useRecaptchaFormAction } from './recaptcha';
@@ -25,11 +26,16 @@ export function BookingForm({ action, recaptchaSiteKey }: { action: BookingActio
           role={state.status === 'error' ? 'alert' : 'status'}
           className={
             state.status === 'error'
-              ? 'rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800'
-              : 'rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800'
+              ? 'flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800'
+              : 'flex items-start gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800'
           }
         >
-          {state.message}
+          {state.status === 'error' ? (
+            <CircleAlert className="mt-0.5 size-4 shrink-0" />
+          ) : (
+            <CircleCheck className="mt-0.5 size-4 shrink-0" />
+          )}
+          <span className="min-w-0">{state.message}</span>
         </p>
       )}
 
@@ -50,8 +56,9 @@ function SubmitButton({ pending }: { pending: boolean }) {
       type="submit"
       disabled={busy}
       aria-disabled={busy}
-      className="inline-flex w-full items-center justify-center rounded-lg bg-primary px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-primary/90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary disabled:cursor-not-allowed disabled:opacity-60 motion-safe:transition-colors"
+      className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-primary px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-primary/90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary disabled:cursor-not-allowed disabled:opacity-60 motion-safe:transition-colors"
     >
+      {busy ? <LoaderCircle className="size-4 motion-safe:animate-spin" /> : <CalendarPlus className="size-4" />}
       {busy ? 'Menyimpan…' : 'Simpan Booking'}
     </button>
   );

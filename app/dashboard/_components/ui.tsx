@@ -1,3 +1,4 @@
+import { CircleAlert, CircleCheck, Inbox } from 'lucide-react';
 import type { FormState } from '@/lib/auth/types';
 
 // Shared dashboard styles + small presentational pieces (server- and client-safe).
@@ -38,11 +39,12 @@ export function FormMessage({ state }: { state: Pick<UiFormState, 'status' | 'me
       role={error ? 'alert' : 'status'}
       className={
         error
-          ? 'rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800'
-          : 'rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800'
+          ? 'flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800'
+          : 'flex items-start gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800'
       }
     >
-      {state.message}
+      {error ? <CircleAlert className="mt-0.5 size-4 shrink-0" /> : <CircleCheck className="mt-0.5 size-4 shrink-0" />}
+      <span className="min-w-0">{state.message}</span>
     </p>
   );
 }
@@ -103,30 +105,40 @@ export function PageHeader({
   title,
   description,
   actions,
+  icon,
 }: {
   eyebrow?: string;
   title: string;
   description?: React.ReactNode;
   actions?: React.ReactNode;
+  icon?: React.ReactNode;
 }) {
   return (
     <div className="mb-6 flex flex-wrap items-end justify-between gap-3">
-      <div className="min-w-0">
-        {eyebrow && <p className="text-xs font-semibold tracking-wide text-zinc-500 uppercase">{eyebrow}</p>}
-        <h1 className="mt-0.5 text-2xl font-semibold tracking-tight break-words text-primary">{title}</h1>
-        {description && <p className="mt-1 text-sm text-zinc-600">{description}</p>}
+      <div className="flex min-w-0 items-center gap-3">
+        {icon && (
+          <span className="hidden size-11 shrink-0 items-center justify-center rounded-xl bg-secondary/30 text-primary sm:flex [&>svg]:size-5">
+            {icon}
+          </span>
+        )}
+        <div className="min-w-0">
+          {eyebrow && <p className="text-xs font-semibold tracking-wide text-zinc-500 uppercase">{eyebrow}</p>}
+          <h1 className="mt-0.5 text-2xl font-semibold tracking-tight break-words text-primary">{title}</h1>
+          {description && <p className="mt-1 text-sm text-zinc-600">{description}</p>}
+        </div>
       </div>
       {actions && <div className="flex flex-wrap items-center gap-2">{actions}</div>}
     </div>
   );
 }
 
-export function EmptyState({ children }: { children: React.ReactNode }) {
+export function EmptyState({ children, icon }: { children: React.ReactNode; icon?: React.ReactNode }) {
   return (
     <p
       role="status"
       className="rounded-xl border border-dashed border-zinc-300 bg-white px-4 py-10 text-center text-sm text-zinc-500"
     >
+      <span className="mb-2 flex justify-center text-zinc-400 [&>svg]:size-6">{icon ?? <Inbox />}</span>
       {children}
     </p>
   );

@@ -1,6 +1,15 @@
 import { Suspense } from 'react';
 import type { Metadata } from 'next';
 import Link from 'next/link';
+import {
+  ClipboardCheck,
+  LogIn,
+  Network,
+  Palette,
+  Settings,
+  ShieldCheck,
+  type LucideIcon,
+} from 'lucide-react';
 import { io } from 'next/cache';
 import { requireSuperadmin } from '@/lib/auth/access';
 import { formatDateLabel, formatTime } from '@/lib/booking/time';
@@ -44,6 +53,7 @@ async function SettingsContent({ searchParams }: { searchParams: SearchParams })
             ? `Terakhir diubah oleh ${settings.updatedByName} pada ${formatDateLabel(settings.updatedAt)}, ${formatTime(settings.updatedAt)} WIB.`
             : 'Berlaku untuk semua ruangan.'
         }
+        icon={<Settings />}
       />
       <TabNav active={tab} protectionWarning={!settings.recaptchaEnabled} />
       <div className="mt-6">
@@ -53,6 +63,14 @@ async function SettingsContent({ searchParams }: { searchParams: SearchParams })
   );
 }
 
+const TAB_ICONS: Record<SettingsTab, LucideIcon> = {
+  tampilan: Palette,
+  login: LogIn,
+  'ip-kantor': Network,
+  'daftar-hadir': ClipboardCheck,
+  proteksi: ShieldCheck,
+};
+
 // Server links: deep-linkable, survives refresh(); only the active tab is rendered.
 function TabNav({ active, protectionWarning }: { active: SettingsTab; protectionWarning: boolean }) {
   return (
@@ -60,6 +78,7 @@ function TabNav({ active, protectionWarning }: { active: SettingsTab; protection
       <ul className="flex min-w-max gap-1 border-b border-zinc-200">
         {SETTINGS_TABS.map((t) => {
           const current = t === active;
+          const Icon = TAB_ICONS[t];
           return (
             <li key={t}>
               <Link
@@ -74,6 +93,7 @@ function TabNav({ active, protectionWarning }: { active: SettingsTab; protection
                     : 'border-transparent font-medium text-zinc-600 hover:border-zinc-300 hover:text-zinc-900')
                 }
               >
+                <Icon className="size-4" />
                 {SETTINGS_TAB_LABELS[t]}
                 {t === 'proteksi' && protectionWarning && (
                   <span className="size-1.5 rounded-full bg-amber-500">

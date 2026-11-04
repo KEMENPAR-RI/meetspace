@@ -1,3 +1,4 @@
+import { formatWait } from '@/lib/booking/types';
 import { prisma } from '@/lib/prisma';
 import { getAppSettings } from '@/lib/settings/queries';
 
@@ -10,7 +11,7 @@ const MINUTE_MS = 60_000;
 export type PublicQuotaResult = { ok: true } | { ok: false; retryAfterMin: number };
 
 export function rateLimitMessage(retryAfterMin: number): string {
-  return `Terlalu banyak percobaan, coba lagi dalam ${retryAfterMin} menit.`;
+  return `Terlalu banyak percobaan, coba lagi dalam ${formatWait(retryAfterMin)}.`;
 }
 
 // Public mutations (attendance + booking) share one fixed window per IP key, across rooms.

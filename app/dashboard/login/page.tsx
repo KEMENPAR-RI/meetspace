@@ -1,6 +1,7 @@
 import { Suspense } from 'react';
 import type { Metadata } from 'next';
 import Link from 'next/link';
+import { ArrowLeft, LogIn } from 'lucide-react';
 import { io } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { getCurrentUser } from '@/lib/auth/access';
@@ -27,7 +28,8 @@ export default function LoginPage() {
           aria-labelledby="login-heading"
           className="rounded-2xl border-t-4 border-secondary bg-white p-6 shadow-xl sm:p-7"
         >
-          <h1 id="login-heading" className="mb-5 text-xl font-semibold text-primary">
+          <h1 id="login-heading" className="mb-5 flex items-center gap-2 text-xl font-semibold text-primary">
+            <LogIn className="size-5" />
             Masuk
           </h1>
           <Suspense fallback={<FormSkeleton />}>
@@ -37,9 +39,10 @@ export default function LoginPage() {
 
         <Link
           href="/"
-          className="mt-5 inline-flex rounded text-sm text-white/80 hover:text-white hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-secondary"
+          className="mt-5 inline-flex items-center gap-1 rounded text-sm text-white/80 hover:text-white hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-secondary"
         >
-          ← Kembali ke halaman booking
+          <ArrowLeft className="size-4" />
+          Kembali ke halaman booking
         </Link>
       </div>
     </main>

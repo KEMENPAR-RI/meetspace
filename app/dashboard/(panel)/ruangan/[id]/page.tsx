@@ -2,6 +2,7 @@ import { Suspense } from 'react';
 import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 import { io } from 'next/cache';
+import { Building2, ToggleRight, TriangleAlert } from 'lucide-react';
 import { updateRoom } from '@/app/actions/room';
 import { requireSuperadmin } from '@/lib/auth/access';
 import { isBookingId } from '@/lib/booking/validation';
@@ -40,10 +41,16 @@ async function EditRoomContent({ params }: { params: Params }) {
       <PageHeader
         eyebrow="Edit ruangan"
         title={room.name}
+        icon={<Building2 />}
         actions={
           <>
             {!room.isActive && <Badge tone="muted">Nonaktif</Badge>}
-            {room.adminIds.length === 0 && <Badge tone="warning">Belum ada penanggung jawab</Badge>}
+            {room.adminIds.length === 0 && (
+              <Badge tone="warning">
+                <TriangleAlert className="size-3.5" />
+                Belum ada penanggung jawab
+              </Badge>
+            )}
             <RoomQrButtons room={room} size="md" />
           </>
         }
@@ -68,7 +75,8 @@ async function EditRoomContent({ params }: { params: Params }) {
       </section>
 
       <section aria-labelledby="room-status-heading" className={cardClass}>
-        <h2 id="room-status-heading" className="mb-3 text-base font-semibold text-primary">
+        <h2 id="room-status-heading" className="mb-3 flex items-center gap-2 text-base font-semibold text-primary">
+          <ToggleRight className="size-5" />
           Status &amp; hapus
         </h2>
         <RoomActions

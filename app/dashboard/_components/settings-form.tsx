@@ -1,6 +1,7 @@
 'use client';
 
 import { startTransition, useActionState, useState } from 'react';
+import { LoaderCircle, Save, Trash2, TriangleAlert } from 'lucide-react';
 import { clearRecaptchaSecret, updateSettingsTab } from '@/app/actions/settings';
 import { useConfirm } from '@/app/_components/confirm-dialog';
 import { initialFormState } from '@/lib/auth/types';
@@ -100,6 +101,7 @@ function SaveBar({ pending }: { pending: boolean }) {
   return (
     <div className="flex justify-end">
       <button type="submit" disabled={pending} className={primaryButton}>
+        {pending ? <LoaderCircle className="size-4 motion-safe:animate-spin" /> : <Save className="size-4" />}
         {pending ? 'Menyimpan…' : 'Simpan'}
       </button>
     </div>
@@ -176,8 +178,11 @@ export function OfficeIpSettingsForm({
           {errors.officeIpCheck && <p className="text-sm text-red-600">{errors.officeIpCheck}</p>}
 
           {ipCheck && ipsEmpty && (
-            <p role="alert" className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900">
-              <span className="font-semibold">Daftar IP kosong.</span> Dengan cek IP aktif, semua akses dan booking dari halaman publik akan ditolak.
+            <p role="alert" className="flex items-start gap-2 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+              <TriangleAlert className="mt-0.5 size-4 shrink-0 text-amber-600" />
+              <span className="min-w-0">
+                <span className="font-semibold">Daftar IP kosong.</span> Dengan cek IP aktif, semua akses dan booking dari halaman publik akan ditolak.
+              </span>
             </p>
           )}
 
@@ -226,9 +231,12 @@ export function OfficeIpSettingsForm({
             </select>
           </Field>
           {pickedHeader === 'cf-connecting-ip' && (
-            <p role="alert" className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900">
-              <span className="font-semibold">Pilih hanya bila situs di belakang Cloudflare</span> — header ini bisa
-              dipalsukan bila tidak.
+            <p role="alert" className="flex items-start gap-2 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+              <TriangleAlert className="mt-0.5 size-4 shrink-0 text-amber-600" />
+              <span className="min-w-0">
+                <span className="font-semibold">Gunakan hanya bila server hanya menerima trafik dari Cloudflare;</span>{' '}
+                jika tidak, IP bisa dipalsukan.
+              </span>
             </p>
           )}
         </div>
@@ -291,19 +299,12 @@ export function ProtectionSettingsForm({
   initial: Pick<AppSettingsView, ProtectionKeys | 'recaptchaSecretSet'>;
 }) {
   const { state, formAction, pending, errors, text, checked } = useTabForm<ProtectionKeys>('proteksi', initial);
-  const [enabled, setEnabled] = useState(checked('recaptchaEnabled'));
 
   return (
     <div className="space-y-6">
       {!initial.recaptchaEnabled && (
         <div role="note" className="flex gap-3 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900">
-          <svg aria-hidden="true" viewBox="0 0 20 20" fill="currentColor" className="mt-0.5 size-5 shrink-0 text-amber-600">
-            <path
-              fillRule="evenodd"
-              d="M8.485 2.495c.673-1.167 2.357-1.167 3.03 0l6.28 10.875c.673 1.167-.17 2.625-1.516 2.625H3.72c-1.347 0-2.189-1.458-1.515-2.625L8.485 2.495ZM10 5a.75.75 0 0 1 .75.75v3.5a.75.75 0 0 1-1.5 0v-3.5A.75.75 0 0 1 10 5Zm0 9a1 1 0 1 0 0-2 1 1 0 0 0 0 2Z"
-              clipRule="evenodd"
-            />
-          </svg>
+          <TriangleAlert className="mt-0.5 size-5 shrink-0 text-amber-600" />
           <p>
             <span className="font-semibold">reCAPTCHA belum aktif.</span> Form daftar hadir, booking publik, dan login
             dashboard belum terlindungi dari bot; hanya batas request per IP dan per perangkat yang berlaku.
@@ -349,8 +350,9 @@ export function ProtectionSettingsForm({
                   type="checkbox"
                   name="recaptchaEnabled"
                   value="1"
-                  checked={enabled}
-                  onChange={(e) => setEnabled(e.currentTarget.checked)}
+                  // Remount when the saved value changes (e.g. after clearing the secret).
+                  key={String(initial.recaptchaEnabled)}
+                  defaultChecked={checked('recaptchaEnabled')}
                   aria-invalid={errors.recaptchaEnabled ? true : undefined}
                   aria-describedby={errors.recaptchaEnabled ? 'set-recaptchaEnabled-error' : undefined}
                   className="mt-0.5 size-4 rounded border-zinc-300 accent-primary"
@@ -464,6 +466,7 @@ function ClearSecretButton() {
     <div className="space-y-2 pt-1">
       {/* type=button: sits inside the tab form without submitting it */}
       <button type="button" onClick={onClick} disabled={pending} className={dangerButton}>
+        <Trash2 className="size-4" />
         {pending ? 'Menghapus…' : 'Hapus secret key'}
       </button>
       <FormMessage state={state} />

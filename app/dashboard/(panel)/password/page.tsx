@@ -1,5 +1,6 @@
 import { Suspense } from 'react';
 import type { Metadata } from 'next';
+import { KeyRound } from 'lucide-react';
 import { changeOwnPassword } from '@/app/actions/auth';
 import { requireUser } from '@/lib/auth/access';
 import { PasswordForm } from '../../_components/password-form';
@@ -23,6 +24,7 @@ async function ChangePasswordContent() {
         eyebrow="Akun saya"
         title="Ganti Password"
         description="Sesi di perangkat lain akan berakhir setelah password diganti."
+        icon={<KeyRound />}
       />
       <section className={cardClass}>
         <PasswordForm action={changeOwnPassword} mode="own" />

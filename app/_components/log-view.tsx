@@ -1,6 +1,7 @@
 'use client';
 
 import { useRef, useState } from 'react';
+import { CalendarX2 } from 'lucide-react';
 import type { LogData } from '@/lib/booking/log';
 import { DayDetailDialog } from './day-detail-dialog';
 import type { RoomOption } from '@/lib/room/types';
@@ -46,6 +47,7 @@ export function LogView({ data, filtered, rooms }: Props) {
           role="status"
           className="rounded-xl border border-dashed border-zinc-300 bg-white px-4 py-6 text-center text-sm text-zinc-500"
         >
+          <CalendarX2 className="mx-auto mb-2 block size-6 text-zinc-400" />
           {filtered
             ? 'Tidak ada reservasi yang cocok dengan filter ini.'
             : `Tidak ada reservasi pada tahun ${data.year}.`}

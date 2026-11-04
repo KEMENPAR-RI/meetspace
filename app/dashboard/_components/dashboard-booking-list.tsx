@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { CalendarX2, ClipboardCheck } from 'lucide-react';
 import { CancelButton } from '@/app/_components/cancel-button';
 import { EditBookingButton } from '@/app/_components/edit-booking-button';
 import type { RoomOption } from '@/lib/room/types';
@@ -29,7 +30,7 @@ export function DashboardBookingList({
   filtered: boolean;
 }) {
   if (bookings.length === 0) {
-    return <EmptyState>{filtered ? 'Tidak ada booking mendatang di ruangan ini.' : 'Belum ada booking mendatang.'}</EmptyState>;
+    return <EmptyState icon={<CalendarX2 />}>{filtered ? 'Tidak ada booking mendatang di ruangan ini.' : 'Belum ada booking mendatang.'}</EmptyState>;
   }
 
   return (
@@ -67,6 +68,7 @@ export function DashboardBookingList({
             <p className="mt-1.5 whitespace-pre-line break-words text-sm text-zinc-700">{b.agenda}</p>
             <div className="mt-3 flex flex-wrap items-start gap-2">
               <Link href={`/dashboard/rapat/${b.id}`} className={smallButton} aria-label={`Daftar hadir ${when}`}>
+                <ClipboardCheck className="size-3.5" />
                 Daftar hadir
               </Link>
               {/* UX only; actions re-check access */}

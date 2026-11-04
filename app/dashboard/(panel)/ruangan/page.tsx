@@ -1,6 +1,7 @@
 import { Suspense } from 'react';
 import type { Metadata } from 'next';
 import Link from 'next/link';
+import { Building2, DoorClosed, Plus } from 'lucide-react';
 import { io } from 'next/cache';
 import { requireSuperadmin } from '@/lib/auth/access';
 import { getDashboardRooms } from '@/lib/room/queries';
@@ -28,14 +29,16 @@ async function RoomsContent() {
         eyebrow="Kelola"
         title="Ruangan"
         description="Data ruangan, penanggung jawab, status, dan QR halaman booking."
+        icon={<Building2 />}
         actions={
           <Link href="/dashboard/ruangan/baru" className={primaryButton}>
-            + Tambah ruangan
+            <Plus className="size-4" />
+            Tambah ruangan
           </Link>
         }
       />
       {rooms.length === 0 ? (
-        <EmptyState>Belum ada ruangan.</EmptyState>
+        <EmptyState icon={<DoorClosed />}>Belum ada ruangan.</EmptyState>
       ) : (
         <ul className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
           {rooms.map((room) => (

@@ -1,3 +1,4 @@
+import { ListFilter } from 'lucide-react';
 import { inputClass, secondaryButton } from './ui';
 
 // Plain GET form: works without JS, URL stays the source of truth.
@@ -26,6 +27,7 @@ export function RoomFilter({
         </select>
       </div>
       <button type="submit" className={secondaryButton}>
+        <ListFilter className="size-4" />
         Tampilkan
       </button>
     </form>

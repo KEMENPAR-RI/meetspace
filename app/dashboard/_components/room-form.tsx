@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { useActionState } from 'react';
+import { LoaderCircle, Save } from 'lucide-react';
 import { initialFormState } from '@/lib/auth/types';
 import { ROOM_LIMITS as LIMITS, type AssignableAdmin } from '@/lib/room/types';
 import { Field, FormMessage, fieldAria, inputClass, primaryButton, readValue, type UiFormState } from './ui';
@@ -175,6 +176,7 @@ export function RoomForm({ action, initial, admins, roomId, submitLabel }: Props
 
       <div className="flex justify-end border-t border-zinc-100 pt-5">
         <button type="submit" disabled={pending} className={primaryButton}>
+          {pending ? <LoaderCircle className="size-4 motion-safe:animate-spin" /> : <Save className="size-4" />}
           {pending ? 'Menyimpan…' : submitLabel}
         </button>
       </div>

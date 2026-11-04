@@ -5,7 +5,7 @@ import { headers } from 'next/headers';
 
 import { prisma } from '@/lib/prisma';
 import { authorizeAttendance, authorizeBooking, authorizeUser, getCurrentUser } from '@/lib/auth/access';
-import { checkOfficeAccess, getClientIpKey, isOfficeIp } from '@/lib/office-access';
+import { getClientIpKey, isOfficeIp } from '@/lib/office-access';
 import { consumePublicMutationQuota, isBookingAttendanceFull, rateLimitMessage } from '@/lib/rate-limit';
 import { RECAPTCHA_FAILED_MESSAGE, verifyRecaptcha } from '@/lib/recaptcha';
 import { getAppSettings } from '@/lib/settings/queries';
@@ -87,8 +87,9 @@ export async function submitPublicAttendance(
   const now = new Date();
   // Server-verified session (admin/superadmin) bypasses the IP and device limits, not reCAPTCHA.
   const user = await getCurrentUser();
-  const office = (await checkOfficeAccess(h)).allowed;
-  if (!user && !(await isOfficeIp(h))) {
+  // Office allowlist IPs: exempt from the per-IP limit and the per-meeting cap.
+  const office = await isOfficeIp(h);
+  if (!user && !office) {
     const ipKey = await getClientIpKey(h);
     if (!ipKey) return fail('Tidak diizinkan.');
     // Counts every attempt, including ones that fail validation.

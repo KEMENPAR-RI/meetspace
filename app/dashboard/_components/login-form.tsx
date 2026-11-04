@@ -2,10 +2,13 @@
 
 import { useActionState } from 'react';
 import { useFormStatus } from 'react-dom';
+import { CircleAlert, LoaderCircle, LockKeyhole, LogIn, User } from 'lucide-react';
 import { login } from '@/app/actions/auth';
 import { initialLoginState, PASSWORD_MAX, USERNAME_MAX } from '@/lib/auth/types';
 import { RecaptchaNotice, useRecaptchaFormAction } from '@/app/_components/recaptcha';
 import { Field, inputClass, primaryButton } from './ui';
+
+const fieldIconClass = 'pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-zinc-400';
 
 // recaptchaSiteKey null = reCAPTCHA disabled.
 export function LoginForm({ recaptchaSiteKey }: { recaptchaSiteKey: string | null }) {
@@ -19,40 +22,47 @@ export function LoginForm({ recaptchaSiteKey }: { recaptchaSiteKey: string | nul
     <form action={recaptcha.formAction} className="space-y-5">
       {recaptcha.recaptchaScript}
       {failed && state.message && (
-        <p role="alert" className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">
-          {state.message}
+        <p role="alert" className="flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">
+          <CircleAlert className="mt-0.5 size-4 shrink-0" />
+          <span className="min-w-0">{state.message}</span>
         </p>
       )}
 
       <Field label="Username" id="username">
-        <input
-          id="username"
-          name="username"
-          type="text"
-          required
-          autoFocus
-          autoCapitalize="none"
-          autoCorrect="off"
-          spellCheck={false}
-          maxLength={USERNAME_MAX}
-          autoComplete="username"
-          defaultValue={username}
-          aria-invalid={failed ? true : undefined}
-          className={inputClass}
-        />
+        <div className="relative">
+          <User className={fieldIconClass} />
+          <input
+            id="username"
+            name="username"
+            type="text"
+            required
+            autoFocus
+            autoCapitalize="none"
+            autoCorrect="off"
+            spellCheck={false}
+            maxLength={USERNAME_MAX}
+            autoComplete="username"
+            defaultValue={username}
+            aria-invalid={failed ? true : undefined}
+            className={`${inputClass} pl-9`}
+          />
+        </div>
       </Field>
 
       <Field label="Password" id="password">
-        <input
-          id="password"
-          name="password"
-          type="password"
-          required
-          maxLength={PASSWORD_MAX}
-          autoComplete="current-password"
-          aria-invalid={failed ? true : undefined}
-          className={inputClass}
-        />
+        <div className="relative">
+          <LockKeyhole className={fieldIconClass} />
+          <input
+            id="password"
+            name="password"
+            type="password"
+            required
+            maxLength={PASSWORD_MAX}
+            autoComplete="current-password"
+            aria-invalid={failed ? true : undefined}
+            className={`${inputClass} pl-9`}
+          />
+        </div>
       </Field>
 
       <SubmitButton />
@@ -66,6 +76,7 @@ function SubmitButton() {
   const { pending } = useFormStatus();
   return (
     <button type="submit" disabled={pending} className={`${primaryButton} w-full`}>
+      {pending ? <LoaderCircle className="size-4 motion-safe:animate-spin" /> : <LogIn className="size-4" />}
       {pending ? 'Memproses…' : 'Masuk'}
     </button>
   );

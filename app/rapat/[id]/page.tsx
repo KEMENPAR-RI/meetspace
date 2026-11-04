@@ -2,6 +2,7 @@ import { Suspense } from 'react';
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { io } from 'next/cache';
+import { CalendarX2, Clock, DoorOpen, Lock, LockOpen, PenLine } from 'lucide-react';
 import { isAttendanceOpen } from '@/lib/booking/attendance-window';
 import { getBookingAttendance } from '@/lib/booking/queries';
 import type { Attendee } from '@/lib/booking/types';
@@ -64,14 +65,16 @@ async function AttendanceContent({ params }: { params: Params }) {
         aria-labelledby="meeting-heading"
         className="rounded-2xl border border-zinc-200 border-l-4 border-l-secondary bg-white p-5 shadow-sm sm:p-6"
       >
-        <p className="text-xs font-semibold tracking-wide text-zinc-500 uppercase">
+        <p className="flex items-center gap-1.5 text-xs font-semibold tracking-wide text-zinc-500 uppercase">
+          <DoorOpen className="size-4 shrink-0" />
           Daftar Hadir Rapat · <span className="normal-case">{booking.room.name}</span>
         </p>
         <h2 id="meeting-heading" className="mt-1 text-xl font-semibold tracking-tight text-primary sm:text-2xl">
           <time dateTime={booking.startsAt.toISOString()}>{formatDateLabel(booking.startsAt)}</time>
         </h2>
         <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1.5 text-sm">
-          <span className="font-medium tabular-nums text-zinc-700">
+          <span className="inline-flex items-center gap-1.5 font-medium tabular-nums text-zinc-700">
+            <Clock className="size-4 text-zinc-400" />
             {formatTimeRange(booking.startsAt, booking.endsAt)}
           </span>
           <StatusBadge
@@ -79,7 +82,8 @@ async function AttendanceContent({ params }: { params: Params }) {
             endsAt={booking.endsAt.toISOString()}
             initialStatus={getBookingStatus(booking.startsAt, booking.endsAt, now)}
           />
-          <span className={`text-xs font-medium ${open ? 'text-emerald-700' : 'text-zinc-500'}`}>
+          <span className={`inline-flex items-center gap-1 text-xs font-medium ${open ? 'text-emerald-700' : 'text-zinc-500'}`}>
+            {open ? <LockOpen className="size-3.5" /> : <Lock className="size-3.5" />}
             {open ? 'Daftar hadir dibuka' : 'Daftar hadir ditutup'}
           </span>
         </div>
@@ -96,8 +100,9 @@ async function AttendanceContent({ params }: { params: Params }) {
             <Link
               href={`/hadir/${booking.room.id}`}
               prefetch={false}
-              className="inline-flex items-center justify-center rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-primary/90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary motion-safe:transition-colors"
+              className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-primary/90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary motion-safe:transition-colors"
             >
+              <PenLine className="size-4" />
               Isi Daftar Hadir
             </Link>
           </div>
@@ -117,6 +122,9 @@ function NotFoundCard() {
       aria-labelledby="missing-heading"
       className="mx-auto max-w-md rounded-2xl border border-zinc-200 bg-white p-6 text-center shadow-sm sm:p-8"
     >
+      <span className="mx-auto mb-4 flex size-12 items-center justify-center rounded-full bg-secondary/30 text-primary">
+        <CalendarX2 className="size-6" />
+      </span>
       <h2 id="missing-heading" className="text-lg font-semibold text-primary">
         Rapat tidak ditemukan
       </h2>

@@ -1,6 +1,7 @@
 'use client';
 
 import { useActionState } from 'react';
+import { LoaderCircle, Save, UserPlus } from 'lucide-react';
 import {
   initialFormState,
   PASSWORD_MAX,
@@ -135,6 +136,7 @@ export function UserForm({ action, mode, initial }: Props) {
 
       <div className="flex justify-end border-t border-zinc-100 pt-5">
         <button type="submit" disabled={pending} className={primaryButton}>
+          {pending ? <LoaderCircle className="size-4 motion-safe:animate-spin" /> : mode === 'create' ? <UserPlus className="size-4" /> : <Save className="size-4" />}
           {pending ? 'Menyimpan…' : mode === 'create' ? 'Buat Akun' : 'Simpan Perubahan'}
         </button>
       </div>

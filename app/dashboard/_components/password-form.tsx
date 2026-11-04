@@ -1,6 +1,7 @@
 'use client';
 
 import { useActionState } from 'react';
+import { KeyRound, LoaderCircle } from 'lucide-react';
 import { initialFormState, PASSWORD_MAX, PASSWORD_MIN } from '@/lib/auth/types';
 import { Field, FormMessage, fieldAria, inputClass, primaryButton, type UiFormState } from './ui';
 
@@ -62,6 +63,7 @@ export function PasswordForm({ action, mode }: Props) {
 
       <div className="flex justify-end">
         <button type="submit" disabled={pending} className={primaryButton}>
+          {pending ? <LoaderCircle className="size-4 motion-safe:animate-spin" /> : <KeyRound className="size-4" />}
           {pending ? 'Menyimpan…' : mode === 'own' ? 'Ganti Password' : 'Reset Password'}
         </button>
       </div>

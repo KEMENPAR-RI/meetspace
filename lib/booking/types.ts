@@ -136,7 +136,16 @@ export const initialAttendanceFormState: AttendanceFormState = { status: 'idle' 
 
 // Public attendance: this browser already submitted within the cooldown (lib/booking/device-lock.ts).
 export function deviceLockedMessage(remainingMin: number): string {
-  return `Perangkat ini sudah mengisi daftar hadir. Coba lagi dalam ${remainingMin} menit.`;
+  return `Perangkat ini sudah mengisi daftar hadir. Coba lagi dalam ${formatWait(remainingMin)}.`;
+}
+
+// Minutes as "45 menit" / "2 jam" / "1 jam 30 menit" (rounded up, min 1).
+export function formatWait(minutes: number): string {
+  const m = Math.max(1, Math.ceil(minutes));
+  if (m < 60) return `${m} menit`;
+  const h = Math.floor(m / 60);
+  const rest = m % 60;
+  return rest ? `${h} jam ${rest} menit` : `${h} jam`;
 }
 
 // Serializable attendee row for the list.

@@ -1,6 +1,7 @@
 'use client';
 
 import { startTransition, useActionState, useCallback, useEffect, useRef } from 'react';
+import { CircleAlert, LoaderCircle, Save, X } from 'lucide-react';
 import { updateBooking } from '@/app/actions/booking';
 import { initialBookingFormState, type EditableBooking } from '@/lib/booking/types';
 import type { RoomOption } from '@/lib/room/types';
@@ -90,9 +91,7 @@ export function EditBookingDialog({ booking, rooms, onClose }: Props) {
             aria-label="Tutup"
             className="-m-1 rounded-md p-1 disabled:cursor-not-allowed disabled:opacity-50 text-zinc-500 hover:bg-zinc-100 hover:text-zinc-800 focus-visible:outline-2 focus-visible:outline-primary"
           >
-            <svg aria-hidden="true" viewBox="0 0 20 20" fill="currentColor" className="size-5">
-              <path d="M6.28 5.22a.75.75 0 0 0-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 1 0 1.06 1.06L10 11.06l3.72 3.72a.75.75 0 1 0 1.06-1.06L11.06 10l3.72-3.72a.75.75 0 0 0-1.06-1.06L10 8.94 6.28 5.22Z" />
-            </svg>
+            <X className="size-5" />
           </button>
         </div>
 
@@ -100,9 +99,10 @@ export function EditBookingDialog({ booking, rooms, onClose }: Props) {
           {state.status === 'error' && state.message && (
             <p
               role="alert"
-              className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800"
+              className="flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800"
             >
-              {state.message}
+              <CircleAlert className="mt-0.5 size-4 shrink-0" />
+              <span className="min-w-0">{state.message}</span>
             </p>
           )}
 
@@ -151,8 +151,9 @@ export function EditBookingDialog({ booking, rooms, onClose }: Props) {
             <button
               type="submit"
               disabled={pending}
-              className="inline-flex items-center justify-center rounded-lg bg-primary px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-primary/90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary disabled:cursor-not-allowed disabled:opacity-60 motion-safe:transition-colors"
+              className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-primary px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-primary/90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary disabled:cursor-not-allowed disabled:opacity-60 motion-safe:transition-colors"
             >
+              {pending ? <LoaderCircle className="size-4 motion-safe:animate-spin" /> : <Save className="size-4" />}
               {pending ? 'Menyimpan…' : 'Simpan Perubahan'}
             </button>
           </div>

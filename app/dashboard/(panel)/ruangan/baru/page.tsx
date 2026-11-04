@@ -1,6 +1,7 @@
 import { Suspense } from 'react';
 import type { Metadata } from 'next';
 import { io } from 'next/cache';
+import { Building2 } from 'lucide-react';
 import { createRoom } from '@/app/actions/room';
 import { requireSuperadmin } from '@/lib/auth/access';
 import { getAssignableAdmins } from '@/lib/room/queries';
@@ -26,7 +27,7 @@ async function NewRoomContent() {
   return (
     <div className="mx-auto max-w-2xl">
       <BackLink href="/dashboard/ruangan">Ruangan</BackLink>
-      <PageHeader title="Tambah Ruangan" />
+      <PageHeader title="Tambah Ruangan" icon={<Building2 />} />
       <section className={cardClass}>
         <RoomForm action={createRoom} admins={admins} submitLabel="Simpan Ruangan" />
       </section>

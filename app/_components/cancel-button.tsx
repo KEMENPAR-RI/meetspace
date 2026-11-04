@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useTransition } from 'react';
+import { X } from 'lucide-react';
 import { cancelBooking } from '@/app/actions/booking';
 import { useConfirm } from './confirm-dialog';
 
@@ -36,8 +37,9 @@ export function CancelButton({ id }: { id: string }) {
         type="button"
         onClick={onClick}
         disabled={pending}
-        className="rounded-md border border-red-300 bg-white px-2.5 py-1 text-xs font-medium text-red-700 hover:bg-red-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-600 disabled:cursor-not-allowed disabled:opacity-60 motion-safe:transition-colors"
+        className="inline-flex items-center gap-1 rounded-md border border-red-300 bg-white px-2.5 py-1 text-xs font-medium text-red-700 hover:bg-red-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-600 disabled:cursor-not-allowed disabled:opacity-60 motion-safe:transition-colors"
       >
+        <X className="size-3.5" />
         {pending ? 'Membatalkan…' : 'Batal'}
       </button>
       {error && (

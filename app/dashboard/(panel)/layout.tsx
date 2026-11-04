@@ -1,5 +1,6 @@
 import { Suspense } from 'react';
 import Link from 'next/link';
+import { LogOut } from 'lucide-react';
 import { logout } from '@/app/actions/auth';
 import { getCurrentUser, isSuperadmin } from '@/lib/auth/access';
 import { USER_ROLE_LABELS } from '@/lib/auth/types';
@@ -85,8 +86,9 @@ async function Nav() {
         <form action={logout}>
           <button
             type="submit"
-            className="inline-flex h-9 w-full items-center justify-center rounded-lg border border-white/25 px-3 text-sm font-medium text-white hover:bg-white/10 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-secondary motion-safe:transition-colors"
+            className="inline-flex h-9 w-full items-center justify-center gap-1.5 rounded-lg border border-white/25 px-3 text-sm font-medium text-white hover:bg-white/10 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-secondary motion-safe:transition-colors"
           >
+            <LogOut className="size-4" />
             Logout
           </button>
         </form>

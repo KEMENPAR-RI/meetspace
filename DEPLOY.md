@@ -63,12 +63,12 @@ DB_DATABASE=booking_rapat
 DB_USERNAME=booking
 DB_PASSWORD=PASSWORD_KUAT
 APP_URL="https://rapat.example.go.id"
-NEXT_PUBLIC_APP_MAINTAINER=APJAR
+NEXT_PUBLIC_APP_MAINTAINER="BIRODATIN - APJAR"
 ```
 
 - `APP_URL`: alamat publik (domain di bagian 4), tanpa path. Dipakai untuk QR dan link. Kosong = QR nonaktif. Skema (`http://` atau `https://`) juga menentukan flag `Secure` pada cookie login bila reverse proxy tidak mengirim `X-Forwarded-Proto`. Dengan `https://`, aplikasi wajib diakses lewat HTTPS; dengan `http://`, cookie dikirim tanpa `Secure` (kurang aman, hanya untuk intranet).
 - Batas login, cek IP kantor, header IP, dan maks peserta tidak lagi di `.env`. Semua diatur superadmin di `/dashboard/pengaturan` (disimpan di DB). Default: login 10x/username dan 50x/IP per 15 menit, cek IP kantor nonaktif, header `x-real-ip`, maks 200 peserta.
-- `NEXT_PUBLIC_APP_MAINTAINER`: nama pengelola di halaman error. Nilainya tertanam saat build: setelah diubah wajib `docker compose build` ulang (restart saja tidak cukup). Kosong = `APJAR`.
+- `NEXT_PUBLIC_APP_MAINTAINER`: nama pengelola di halaman error. Nilainya tertanam saat build: setelah diubah wajib `docker compose build` ulang (restart saja tidak cukup). Kosong = `BIRODATIN - APJAR`.
 - `DB_HOST` biarkan saja, Docker mengisinya `127.0.0.1`.
 - `COMPOSE_FILE` dan `DOCKER_DB_HOST` tidak dipakai lagi. Kalau ada di `.env`, hapus.
 - Kalau ada `DATABASE_URL` atau `DATABASE_URL_UNPOOLED`, hapus.
@@ -115,6 +115,7 @@ location / {
     proxy_set_header X-Real-IP $remote_addr;
     proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
     proxy_set_header X-Forwarded-Proto $scheme;
+    proxy_set_header CF-Connecting-IP "";   # hapus baris ini hanya bila memakai Cloudflare
     proxy_set_header Upgrade $http_upgrade;
     proxy_set_header Connection "upgrade";
 }
@@ -125,6 +126,8 @@ sudo nginx -t && sudo nginx -s reload
 ```
 
 Baris `X-Real-IP` wajib ada. Aplikasi membaca IP pengunjung dari situ (header default di `/dashboard/pengaturan`) untuk cek IP kantor dan batas login. Kalau header salah, semua percobaan login dihitung satu IP, sehingga satu orang bisa membuat semua admin terkunci.
+
+Baris `CF-Connecting-IP ""` membuang header palsu dari klien. Header IP `cf-connecting-ip` di Pengaturan hanya boleh dipakai bila origin dikunci ke IP Cloudflare (firewall/aaPanel hanya menerima IP Cloudflare); kalau tidak, siapa pun bisa memalsukan IP.
 
 HTTPS wajib: dashboard dan login bisa diakses dari internet, dan cookie sesi hanya dikirim lewat HTTPS. Pasang SSL di aaPanel (Website > domain > SSL > Let's Encrypt) dan aktifkan Force HTTPS.
 
@@ -233,7 +236,7 @@ docker compose up -d --no-build --no-deps app
 Menambah tabel `attendance_device_locks`, batas request publik, dan reCAPTCHA v3 (diatur di Pengaturan, bukan `.env`).
 
 ```sh
-grep -q '^NEXT_PUBLIC_APP_MAINTAINER=' .env || { sed -i '$a\' .env && echo 'NEXT_PUBLIC_APP_MAINTAINER=APJAR' >> .env; }
+grep -q '^NEXT_PUBLIC_APP_MAINTAINER=' .env || { sed -i '$a\' .env && echo 'NEXT_PUBLIC_APP_MAINTAINER="BIRODATIN - APJAR"' >> .env; }
 git pull
 export APP_TAG=$(git rev-parse HEAD | cut -c1-7)
 docker compose build && docker compose run --rm migrate && docker compose up -d \
@@ -263,6 +266,7 @@ docker compose up -d --no-build --no-deps app
 | `P1001` | Migration tidak bisa menghubungi MySQL | Pastikan MySQL jalan, lihat output terminal, cek ulang `docker compose run --rm migrate migrate status` |
 | `Access denied for user` | Password salah atau user belum dibuat | Cek `DB_PASSWORD`, ulangi bagian Database + user |
 | Build gagal / killed / out of memory | RAM kurang | Pasang swap (bagian 2) |
+| Login: `Tidak dapat memverifikasi alamat jaringan.` | Aplikasi production diakses tanpa reverse proxy yang mengirim header IP terpercaya | Akses lewat domain nginx (bagian 4), cek `X-Real-IP` dan header IP di Pengaturan |
 | Container tidak `(healthy)` | Aplikasi gagal start (`(healthy)` tidak mengecek DB) | `docker compose logs app`, cocokkan dengan baris di atas |
 
 ## 7. Perintah berguna
@@ -274,6 +278,14 @@ docker compose restart app       # restart aplikasi
 # cek / jalankan migration manual
 docker compose run --rm migrate migrate status
 docker compose run --rm migrate
+```
+
+Break-glass: matikan reCAPTCHA lewat DB bila tidak bisa login (key salah, Google tidak terjangkau):
+
+```sh
+/www/server/mysql/bin/mysql -u booking -p booking_rapat \
+  -e "UPDATE app_settings SET value = 'false' WHERE \`key\` = 'recaptcha_enabled';"
+docker compose restart app      # atau tunggu ±30 detik (cache pengaturan)
 ```
 
 Rollback database: jalankan `down.sql` dari migration terbaru mundur ke yang ingin dibatalkan (urutan terbalik). Contoh batalkan migration terakhir saja:

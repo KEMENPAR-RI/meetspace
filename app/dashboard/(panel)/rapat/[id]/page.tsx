@@ -2,6 +2,7 @@ import { Suspense } from 'react';
 import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 import { io } from 'next/cache';
+import { CalendarClock, Clock, DoorOpen, Lock, LockOpen, PenLine, UserRound } from 'lucide-react';
 import { signAttendance } from '@/app/actions/attendance';
 import { requireBookingAccess } from '@/lib/auth/access';
 import {
@@ -60,14 +61,16 @@ async function MeetingContent({ params }: { params: Params }) {
       <BackLink href={`/dashboard/booking?room=${booking.room.id}`}>Booking {booking.room.name}</BackLink>
 
       <section aria-labelledby="meeting-heading" className={`${cardClass} border-l-4 border-l-secondary`}>
-        <p className="text-xs font-semibold tracking-wide text-zinc-500 uppercase">
+        <p className="flex items-center gap-1.5 text-xs font-semibold tracking-wide text-zinc-500 uppercase">
+          <DoorOpen className="size-4 shrink-0" />
           Rapat · <span className="normal-case">{booking.room.name}</span>
         </p>
         <h1 id="meeting-heading" className="mt-1 text-xl font-semibold tracking-tight text-primary sm:text-2xl">
           <time dateTime={booking.startsAt.toISOString()}>{formatDateLabel(booking.startsAt)}</time>
         </h1>
         <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1.5 text-sm">
-          <span className="font-medium tabular-nums text-zinc-700">
+          <span className="inline-flex items-center gap-1.5 font-medium tabular-nums text-zinc-700">
+            <Clock className="size-4 text-zinc-400" />
             {formatTimeRange(booking.startsAt, booking.endsAt)}
           </span>
           <StatusBadge
@@ -75,11 +78,13 @@ async function MeetingContent({ params }: { params: Params }) {
             endsAt={booking.endsAt.toISOString()}
             initialStatus={getBookingStatus(booking.startsAt, booking.endsAt, now)}
           />
-          <span className={`text-xs font-medium ${open ? 'text-emerald-700' : 'text-zinc-500'}`}>
+          <span className={`inline-flex items-center gap-1 text-xs font-medium ${open ? 'text-emerald-700' : 'text-zinc-500'}`}>
+            {open ? <LockOpen className="size-3.5" /> : <Lock className="size-3.5" />}
             {open ? 'Daftar hadir dibuka' : 'Daftar hadir ditutup'}
           </span>
         </div>
-        <p className="mt-3 text-sm text-zinc-600">
+        <p className="mt-3 flex flex-wrap items-center gap-x-1.5 text-sm text-zinc-600">
+          <UserRound className="size-4 shrink-0 text-zinc-400" />
           <span className="font-medium text-zinc-800">{booking.bookerName}</span>
           <span aria-hidden="true"> · </span>
           <span className="sr-only">Satker/Instansi: </span>
@@ -100,7 +105,8 @@ async function MeetingContent({ params }: { params: Params }) {
 
       <div className="grid grid-cols-1 gap-8 lg:grid-cols-[minmax(0,26rem)_minmax(0,1fr)] lg:items-start">
         <section aria-labelledby="sign-heading" className={`${cardClass} lg:sticky lg:top-8`}>
-          <h2 id="sign-heading" className="mb-5 text-lg font-semibold text-primary">
+          <h2 id="sign-heading" className="mb-5 flex items-center gap-2 text-lg font-semibold text-primary">
+            <PenLine className="size-5" />
             Isi Daftar Hadir
           </h2>
           {open ? (
@@ -121,6 +127,7 @@ function ClosedNotice({ startsAt, endsAt, now }: { startsAt: Date; endsAt: Date;
   const closesAt = new Date(endsAt.getTime() + ATTENDANCE_CLOSE_AFTER_MS);
   return (
     <div role="status" className="rounded-xl border border-dashed border-zinc-300 px-4 py-6 text-center">
+      <CalendarClock className="mx-auto mb-2 size-6 text-zinc-400" />
       <p className="text-sm font-semibold text-primary">
         {now < opensAt ? 'Daftar hadir belum dibuka' : 'Daftar hadir sudah ditutup'}
       </p>

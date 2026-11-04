@@ -15,7 +15,7 @@ services:
     build:
       context: .
       target: migrate
-    image: booking-rapat-migrate:${APP_TAG:-latest}
+    image: meetspace-migrate:${APP_TAG:-latest}
     restart: "no"
     mem_limit: 256m
     environment:
@@ -29,7 +29,7 @@ services:
       args:
         # Read from .env at build time; changing it requires a rebuild.
         NEXT_PUBLIC_APP_MAINTAINER: ${NEXT_PUBLIC_APP_MAINTAINER:-}
-    image: booking-rapat:${APP_TAG:-latest}
+    image: meetspace:${APP_TAG:-latest}
     depends_on:
       migrate:
         condition: service_completed_successfully

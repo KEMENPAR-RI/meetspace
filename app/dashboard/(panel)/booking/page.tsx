@@ -2,6 +2,7 @@ import { Suspense } from 'react';
 import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 import { io } from 'next/cache';
+import { CalendarDays } from 'lucide-react';
 import { getRoomScope, requireUser } from '@/lib/auth/access';
 import { getUpcomingBookings } from '@/lib/booking/queries';
 import { getScopeRooms } from '@/lib/room/queries';
@@ -42,6 +43,7 @@ async function BookingContent({ searchParams }: { searchParams: SearchParams }) 
         eyebrow="Booking"
         title="Booking Mendatang"
         description="Edit, pindah ruangan, atau batalkan booking. Daftar hadir dan QR ada di detail rapat."
+        icon={<CalendarDays />}
         actions={<RoomFilter rooms={rooms} selected={roomId} action="/dashboard/booking" />}
       />
       <DashboardBookingList bookings={bookings} rooms={activeRooms} now={now} filtered={Boolean(roomId)} />

@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
+import { CircleHelp, TriangleAlert } from 'lucide-react';
 
 export type ConfirmOptions = {
   title: string;
@@ -103,6 +104,11 @@ function ConfirmDialog({
       }}
       className="m-auto w-[calc(100%-2rem)] max-w-sm rounded-2xl border border-zinc-200 bg-white p-5 text-zinc-900 shadow-lg backdrop:bg-primary/40 sm:p-6"
     >
+      <span
+        className={`mb-3 flex size-10 items-center justify-center rounded-full ${danger ? 'bg-red-50 text-red-600' : 'bg-secondary/30 text-primary'}`}
+      >
+        {danger ? <TriangleAlert className="size-5" /> : <CircleHelp className="size-5" />}
+      </span>
       <h2 id={`${id}-title`} className="text-lg font-semibold text-primary">
         {options.title}
       </h2>

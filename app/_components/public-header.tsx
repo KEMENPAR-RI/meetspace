@@ -1,4 +1,5 @@
 import { Suspense } from 'react';
+import { ClipboardCheck } from 'lucide-react';
 import { BrandLogo, loadBrand } from './brand';
 
 // Header for public attendance pages: no admin controls, no internal links.
@@ -21,7 +22,10 @@ async function Brand() {
         <p className="text-base leading-tight font-semibold tracking-tight text-balance text-primary sm:text-lg">
           {institutionName ?? appName}
         </p>
-        <p className="mt-0.5 text-xs text-zinc-600 sm:text-sm">Daftar Hadir Rapat</p>
+        <p className="mt-0.5 flex items-center gap-1.5 text-xs text-zinc-600 sm:text-sm">
+          <ClipboardCheck className="size-4 shrink-0 text-primary/70" />
+          Daftar Hadir Rapat
+        </p>
       </div>
     </>
   );

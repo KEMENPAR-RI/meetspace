@@ -1,4 +1,15 @@
 import Link from 'next/link';
+import {
+  CalendarCheck,
+  CalendarClock,
+  CalendarX2,
+  ClipboardCheck,
+  DoorOpen,
+  Eye,
+  Radio,
+  TriangleAlert,
+  Users,
+} from 'lucide-react';
 import { RoomMeta } from '@/app/_components/room-meta';
 import { StatusBadge } from '@/app/_components/status-badge';
 import type { AdminHome as AdminHomeData } from '@/lib/booking/admin-home';
@@ -16,7 +27,10 @@ export function AdminHome({ data, now }: { data: AdminHomeData; now: Date }) {
       <section aria-labelledby="room-heading" className={`${cardClass} border-t-4 border-t-secondary`}>
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div className="min-w-0">
-            <p className="text-xs font-semibold tracking-wide text-zinc-500 uppercase">Ruangan Anda</p>
+            <p className="flex items-center gap-1.5 text-xs font-semibold tracking-wide text-zinc-500 uppercase">
+              <DoorOpen className="size-4" />
+              Ruangan Anda
+            </p>
             <h2 id="room-heading" className="mt-0.5 text-xl font-semibold break-words text-primary">
               {room.name}
             </h2>
@@ -28,7 +42,10 @@ export function AdminHome({ data, now }: { data: AdminHomeData; now: Date }) {
               </p>
             )}
             {!room.isActive && (
-              <p className="mt-2 text-sm font-medium text-amber-800">Ruangan sedang nonaktif (tidak bisa dibooking).</p>
+              <p className="mt-2 flex items-center gap-1.5 text-sm font-medium text-amber-800">
+                <TriangleAlert className="size-4 shrink-0" />
+                Ruangan sedang nonaktif (tidak bisa dibooking).
+              </p>
             )}
           </div>
           <div className="flex flex-wrap gap-2">
@@ -38,7 +55,8 @@ export function AdminHome({ data, now }: { data: AdminHomeData; now: Date }) {
       </section>
 
       <section aria-labelledby="current-heading">
-        <h2 id="current-heading" className="mb-3 text-lg font-semibold text-primary">
+        <h2 id="current-heading" className="mb-3 flex items-center gap-2 text-lg font-semibold text-primary">
+          <Radio className="size-5" />
           Rapat berlangsung
         </h2>
         {current ? (
@@ -61,17 +79,19 @@ export function AdminHome({ data, now }: { data: AdminHomeData; now: Date }) {
               {current.satker}
             </p>
             <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-zinc-100 pt-4">
-              <p className="text-sm text-zinc-700">
+              <p className="flex items-center gap-2 text-sm text-zinc-700">
+                <Users className="size-5 text-zinc-400" />
                 <span className="text-2xl font-semibold tabular-nums text-primary">{current.attendeeCount}</span> peserta
                 hadir
               </p>
               <Link href={`/dashboard/rapat/${current.id}`} className={primaryButton}>
+                <ClipboardCheck className="size-4" />
                 Lihat daftar hadir
               </Link>
             </div>
           </div>
         ) : (
-          <EmptyState>Tidak ada rapat yang sedang berlangsung.</EmptyState>
+          <EmptyState icon={<CalendarX2 />}>Tidak ada rapat yang sedang berlangsung.</EmptyState>
         )}
       </section>
 
@@ -107,11 +127,12 @@ function BookingSection({
 }) {
   return (
     <section aria-labelledby={`${id}-heading`}>
-      <h2 id={`${id}-heading`} className="mb-3 text-lg font-semibold text-primary">
+      <h2 id={`${id}-heading`} className="mb-3 flex items-center gap-2 text-lg font-semibold text-primary">
+        {id === 'today' ? <CalendarCheck className="size-5" /> : <CalendarClock className="size-5" />}
         {title}
       </h2>
       {bookings.length === 0 ? (
-        <EmptyState>{empty}</EmptyState>
+        <EmptyState icon={<CalendarX2 />}>{empty}</EmptyState>
       ) : (
         <ul className="space-y-3">
           {bookings.map((b) => (
@@ -140,6 +161,7 @@ function BookingSection({
                   {b.bookerName} · {b.satker}
                 </p>
                 <Link href={`/dashboard/rapat/${b.id}`} className={smallButton}>
+                  <Eye className="size-3.5" />
                   Detail
                 </Link>
               </div>

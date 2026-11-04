@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { CalendarDays, Pencil, TriangleAlert, UserRound } from 'lucide-react';
 import { RoomMeta } from '@/app/_components/room-meta';
 import type { DashboardRoom } from '@/lib/room/types';
 import { RoomQrButtons } from './room-qr-buttons';
@@ -18,29 +19,26 @@ export function RoomCard({ room, superadmin }: { room: DashboardRoom; superadmin
       {superadmin && noPic && (
         <p className="mt-3">
           <Badge tone="warning">
-            <svg aria-hidden="true" viewBox="0 0 20 20" fill="currentColor" className="size-3.5">
-              <path
-                fillRule="evenodd"
-                d="M8.485 2.495c.673-1.167 2.357-1.167 3.03 0l6.28 10.875c.673 1.167-.17 2.625-1.516 2.625H3.72c-1.347 0-2.189-1.458-1.515-2.625L8.485 2.495ZM10 5a.75.75 0 0 1 .75.75v3.5a.75.75 0 0 1-1.5 0v-3.5A.75.75 0 0 1 10 5Zm0 9a1 1 0 1 0 0-2 1 1 0 0 0 0 2Z"
-                clipRule="evenodd"
-              />
-            </svg>
+            <TriangleAlert className="size-3.5" />
             Belum ada penanggung jawab
           </Badge>
         </p>
       )}
       {superadmin && !noPic && (
-        <p className="mt-3 text-xs text-zinc-500">
-          <span className="font-medium text-zinc-700">PJ:</span> {room.admins.map((a) => a.name).join(', ')}
+        <p className="mt-3 flex items-start gap-1.5 text-xs text-zinc-500">
+          <UserRound className="size-3.5 shrink-0" />
+          <span className="min-w-0"><span className="font-medium text-zinc-700">PJ:</span> {room.admins.map((a) => a.name).join(', ')}</span>
         </p>
       )}
       <div className="mt-auto flex flex-wrap gap-2 pt-4">
         <RoomQrButtons room={room} />
         <Link href={`/dashboard/booking?room=${room.id}`} className={smallButton}>
+          <CalendarDays className="size-3.5" />
           Booking
         </Link>
         {superadmin && (
           <Link href={`/dashboard/ruangan/${room.id}`} className={smallButton} aria-label={`Edit ruangan ${room.name}`}>
+            <Pencil className="size-3.5" />
             Edit
           </Link>
         )}

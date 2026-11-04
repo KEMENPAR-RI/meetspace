@@ -42,12 +42,12 @@ function matchOfficeAllowlist(
   return isIpAllowed(ip, rules) ? { allowed: true } : { allowed: false, reason: 'not-allowed' };
 }
 
-// Rate-limit key from the trusted header: IPv4 per address, IPv6 per /64; null = unknown.
+// Rate-limit key from the trusted header: IPv4 per address, IPv6 per /56 (a /64 is cheap to rotate); null = unknown.
 export async function getClientIpKey(headers: Headers): Promise<string | null> {
   const { trustedIpHeader } = await getAppSettings();
   if (!trustedIpHeader) return null;
   const ip = extractClientIp(headers.get(trustedIpHeader));
   if (!ip) return null;
-  const value = ip.version === 6 ? ip.value >> BigInt(64) : ip.value;
+  const value = ip.version === 6 ? ip.value >> BigInt(72) : ip.value;
   return `${ip.version}:${value.toString(16)}`;
 }

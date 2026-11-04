@@ -3,6 +3,7 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { io } from 'next/cache';
+import { CalendarClock, CalendarPlus, ChevronRight, DoorClosed, DoorOpen } from 'lucide-react';
 import { createBooking } from '@/app/actions/booking';
 import { findPublicRoomById } from '@/lib/room/queries';
 import { getRecaptchaSiteKey } from '@/lib/settings/recaptcha';
@@ -48,7 +49,10 @@ async function RoomContent({ params }: { params: Params }) {
         aria-labelledby="room-heading"
         className="rounded-2xl border border-zinc-200 border-l-4 border-l-secondary bg-white p-5 shadow-sm sm:p-6"
       >
-        <p className="text-xs font-semibold tracking-wide text-zinc-500 uppercase">Ruangan</p>
+        <p className="flex items-center gap-1.5 text-xs font-semibold tracking-wide text-zinc-500 uppercase">
+          <DoorOpen className="size-4" />
+          Ruangan
+        </p>
         <h2 id="room-heading" className="mt-1 text-2xl font-semibold tracking-tight break-words text-primary">
           {room.name}
         </h2>
@@ -68,14 +72,16 @@ async function RoomContent({ params }: { params: Params }) {
             aria-labelledby="form-heading"
             className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm sm:p-6 lg:sticky lg:top-8"
           >
-            <h2 id="form-heading" className="mb-5 text-lg font-semibold text-primary">
+            <h2 id="form-heading" className="mb-5 flex items-center gap-2 text-lg font-semibold text-primary">
+              <CalendarPlus className="size-5" />
               Buat Booking
             </h2>
             <BookingForm action={createBooking.bind(null, room.id)} recaptchaSiteKey={recaptchaSiteKey} />
           </section>
 
           <section aria-labelledby="list-heading">
-            <h2 id="list-heading" className="mb-4 text-lg font-semibold text-primary">
+            <h2 id="list-heading" className="mb-4 flex items-center gap-2 text-lg font-semibold text-primary">
+              <CalendarClock className="size-5" />
               Booking Mendatang
             </h2>
             <Suspense fallback={<BookingListSkeleton />}>
@@ -89,6 +95,9 @@ async function RoomContent({ params }: { params: Params }) {
           aria-labelledby="unavailable-heading"
           className="mx-auto max-w-md rounded-2xl border border-zinc-200 bg-white p-6 text-center shadow-sm sm:p-8"
         >
+          <span className="mx-auto mb-4 flex size-12 items-center justify-center rounded-full bg-secondary/30 text-primary">
+            <DoorClosed className="size-6" />
+          </span>
           <h2 id="unavailable-heading" className="text-lg font-semibold text-primary">
             Ruangan tidak tersedia
           </h2>
@@ -111,13 +120,7 @@ function PastLink({ roomId }: { roomId: string }) {
       className="mt-4 inline-flex items-center gap-1 rounded text-sm font-medium text-primary hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
     >
       Lihat rapat sebelumnya
-      <svg aria-hidden="true" viewBox="0 0 20 20" fill="currentColor" className="size-4">
-        <path
-          fillRule="evenodd"
-          d="M8.22 5.22a.75.75 0 0 1 1.06 0l4.25 4.25a.75.75 0 0 1 0 1.06l-4.25 4.25a.75.75 0 0 1-1.06-1.06L11.94 10 8.22 6.28a.75.75 0 0 1 0-1.06Z"
-          clipRule="evenodd"
-        />
-      </svg>
+      <ChevronRight className="size-4" />
     </Link>
   );
 }

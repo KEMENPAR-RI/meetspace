@@ -1,6 +1,7 @@
 import { Suspense } from 'react';
 import type { Metadata } from 'next';
 import Link from 'next/link';
+import { KeyRound, Trash2, UserRound } from 'lucide-react';
 import { notFound } from 'next/navigation';
 import { io } from 'next/cache';
 import { resetUserPassword, updateUser } from '@/app/actions/user';
@@ -39,7 +40,12 @@ async function EditUserContent({ params }: { params: Params }) {
   return (
     <div className="mx-auto max-w-xl space-y-6">
       <BackLink href="/dashboard/akun">Akun</BackLink>
-      <PageHeader eyebrow="Edit akun" title={user.name} description={<span className="font-mono">@{user.username}</span>} />
+      <PageHeader
+        eyebrow="Edit akun"
+        title={user.name}
+        icon={<UserRound />}
+        description={<span className="font-mono">@{user.username}</span>}
+      />
 
       <section aria-label="Data akun" className={cardClass}>
         <UserForm
@@ -60,7 +66,8 @@ async function EditUserContent({ params }: { params: Params }) {
       </section>
 
       <section aria-labelledby="reset-heading" className={cardClass}>
-        <h2 id="reset-heading" className="mb-1 text-base font-semibold text-primary">
+        <h2 id="reset-heading" className="mb-1 flex items-center gap-2 text-base font-semibold text-primary">
+          <KeyRound className="size-5" />
           Reset password
         </h2>
         <p className="mb-4 text-sm text-zinc-600">Semua sesi akun ini akan berakhir setelah password direset.</p>
@@ -79,7 +86,8 @@ async function EditUserContent({ params }: { params: Params }) {
 
       {!self && (
         <section aria-labelledby="delete-heading" className={`${cardClass} border-red-200`}>
-          <h2 id="delete-heading" className="mb-3 text-base font-semibold text-red-800">
+          <h2 id="delete-heading" className="mb-3 flex items-center gap-2 text-base font-semibold text-red-800">
+            <Trash2 className="size-5" />
             Hapus akun
           </h2>
           <DeleteUserButton userId={user.id} userName={user.name} />

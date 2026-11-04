@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
+import { House, MapPinOff } from 'lucide-react';
 
 export const metadata: Metadata = {
   title: 'Halaman Tidak Ditemukan',
@@ -8,6 +9,9 @@ export const metadata: Metadata = {
 export default function NotFound() {
   return (
     <main className="mx-auto flex w-full max-w-md flex-1 flex-col items-center justify-center px-4 py-16 text-center font-sans">
+      <span className="mb-4 flex size-14 items-center justify-center rounded-2xl bg-secondary/30 text-primary">
+        <MapPinOff className="size-7" />
+      </span>
       <p className="text-sm font-semibold uppercase tracking-widest text-zinc-500">404</p>
       <h1 className="mt-2 text-2xl font-semibold tracking-tight text-primary sm:text-3xl">
         Halaman tidak ditemukan
@@ -17,8 +21,9 @@ export default function NotFound() {
       </p>
       <Link
         href="/"
-        className="mt-8 inline-flex h-10 items-center justify-center rounded-lg bg-primary px-4 text-sm font-medium text-white hover:bg-primary/90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary motion-safe:transition-colors"
+        className="mt-8 inline-flex h-10 items-center justify-center gap-1.5 rounded-lg bg-primary px-4 text-sm font-medium text-white hover:bg-primary/90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary motion-safe:transition-colors"
       >
+        <House className="size-4" />
         Kembali ke beranda
       </Link>
     </main>
