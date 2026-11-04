@@ -4,17 +4,14 @@ import type { Prisma } from '@/lib/generated/prisma/client';
 import { prisma } from '@/lib/prisma';
 import { lockRooms, type LockedRoom } from '@/lib/room/lock';
 
-import { ATTENDANCE_CLOSE_AFTER_MS, ATTENDANCE_OPEN_BEFORE_MS } from './attendance-window';
-import { LOG_MAX_ATTENDEES, LOG_MAX_ROWS, type ExportAttendee } from './log';
+import { LOG_MAX_ROWS } from './log';
 import { sortByStatus, startOfTodayJakarta } from './time';
-import type { Gender, LogBooking, UpcomingBooking } from './types';
+import type { LogBooking, UpcomingBooking } from './types';
 
 // Public room loaders live in lib/room/queries.ts; re-exported for pages.
 export { findPublicRoomById, getActiveRooms } from '@/lib/room/queries';
 
 const UPCOMING_LIMIT = 100;
-// Overlapping attendance windows in one room are rare; a few candidates are enough to pick one.
-const ATTENDANCE_CANDIDATES_LIMIT = 5;
 
 const ROOM_SELECT = { select: { id: true, name: true } } as const;
 
@@ -75,7 +72,6 @@ type LogRange = { gte: Date; lt: Date };
 // `scope` is required: the log is dashboard-only.
 export type LogFilter = { satker?: string; bookerName?: string; roomId?: string; scope: RoomScope };
 
-// Shared by the log bookings and attendee queries so both see the same set.
 function logWhere(range: LogRange, filter: LogFilter): Prisma.BookingWhereInput {
   return {
     startsAt: { gte: range.gte, lt: range.lt },
@@ -95,113 +91,15 @@ export async function getLogBookings(range: LogRange, filter: LogFilter): Promis
     where: logWhere(range, filter),
     orderBy: { startsAt: 'asc' },
     take: LOG_MAX_ROWS + 1,
-    select: { ...BOOKING_SELECT, _count: { select: { attendances: true } } },
+    select: BOOKING_SELECT,
   });
   const truncated = found.length > LOG_MAX_ROWS;
-  const rows = (truncated ? found.slice(0, LOG_MAX_ROWS) : found).map(toCountedBooking);
-  return { rows, truncated };
+  return { rows: truncated ? found.slice(0, LOG_MAX_ROWS) : found, truncated };
 }
 
-// Attendees of the same booking set as getLogBookings, in signing order; one extra row detects truncation.
-export async function getLogAttendees(
-  range: LogRange,
-  filter: LogFilter,
-): Promise<{ rows: ExportAttendee[]; truncated: boolean }> {
-  if (range.gte >= range.lt) return { rows: [], truncated: false };
-  const rows = await prisma.attendance.findMany({
-    where: { booking: logWhere(range, filter) },
-    orderBy: [{ signedAt: 'asc' }, { id: 'asc' }],
-    take: LOG_MAX_ATTENDEES + 1,
-    select: { bookingId: true, name: true, satker: true, gender: true, role: true, signedAt: true },
-  });
-  const truncated = rows.length > LOG_MAX_ATTENDEES;
-  return { rows: truncated ? rows.slice(0, LOG_MAX_ATTENDEES) : rows, truncated };
-}
-
-const ATTENDEE_SELECT = {
-  id: true,
-  name: true,
-  satker: true,
-  gender: true,
-  role: true,
-  phone: true,
-  signedAt: true,
-} as const;
-
-// `phone` is dashboard-only: map it to null before passing rows to public views (H5).
-export type AttendeeRow = {
-  id: string;
-  name: string;
-  satker: string;
-  gender: Gender | null;
-  role: string | null;
-  phone: string | null;
-  signedAt: Date;
-};
-
-// One booking with its attendees in signing order; null when missing. Dashboard callers authorize first.
-export async function getBookingAttendance(id: string): Promise<{
-  booking: UpcomingBooking;
-  attendees: AttendeeRow[];
-} | null> {
-  const found = await prisma.booking.findUnique({
-    where: { id },
-    select: {
-      ...BOOKING_SELECT,
-      attendances: { orderBy: { signedAt: 'asc' }, select: ATTENDEE_SELECT },
-    },
-  });
-  if (!found) return null;
-  const { attendances, ...booking } = found;
-  return { booking, attendees: attendances };
-}
-
-export type RoomAttendanceCandidate = { id: string; startsAt: Date; endsAt: Date; agenda: string };
-
-// One room's bookings whose attendance window contains `now` (overlap per room keeps this to ~1).
-export async function findOpenBookingsInRoom(roomId: string, now: Date): Promise<RoomAttendanceCandidate[]> {
-  return prisma.booking.findMany({
-    where: {
-      roomId,
-      startsAt: { lte: new Date(now.getTime() + ATTENDANCE_OPEN_BEFORE_MS) },
-      endsAt: { gte: new Date(now.getTime() - ATTENDANCE_CLOSE_AFTER_MS) },
-    },
-    orderBy: { startsAt: 'asc' },
-    take: ATTENDANCE_CANDIDATES_LIMIT,
-    select: { id: true, startsAt: true, endsAt: true, agenda: true },
-  });
-}
-
-// Next booking in a room that has not started yet.
-export async function findNextBookingInRoom(roomId: string, now: Date): Promise<RoomAttendanceCandidate | null> {
-  return prisma.booking.findFirst({
-    where: { roomId, startsAt: { gt: now } },
-    orderBy: { startsAt: 'asc' },
-    select: { id: true, startsAt: true, endsAt: true, agenda: true },
-  });
-}
-
-const RECENT_PAST_DAYS = 30;
-const RECENT_PAST_LIMIT = 100;
-
-// One room's bookings that started in the last 30 WIB days, before today; newest first (C2).
-export async function getRecentPastBookings(now: Date, roomId: string): Promise<LogBooking[]> {
-  const today = startOfTodayJakarta(now);
-  const from = new Date(today.getTime() - RECENT_PAST_DAYS * 86_400_000); // WIB has no DST
-  const found = await prisma.booking.findMany({
-    where: { roomId, startsAt: { gte: from, lt: today } },
-    orderBy: { startsAt: 'desc' },
-    take: RECENT_PAST_LIMIT,
-    select: { ...BOOKING_SELECT, _count: { select: { attendances: true } } },
-  });
-  return found.map(toCountedBooking);
-}
-
-function toCountedBooking({
-  _count,
-  ...booking
-}: UpcomingBooking & { _count: { attendances: number } }): LogBooking {
-  return { ...booking, attendeeCount: _count.attendances };
+// One booking with its room; null when missing. Dashboard callers authorize first.
+export async function getBookingDetail(id: string): Promise<UpcomingBooking | null> {
+  return prisma.booking.findUnique({ where: { id }, select: BOOKING_SELECT });
 }
 
 const SATKER_LIMIT = 200;

@@ -2,9 +2,7 @@ import { Suspense } from 'react';
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import {
-  ClipboardCheck,
   LogIn,
-  Network,
   Palette,
   Settings,
   ShieldCheck,
@@ -17,9 +15,7 @@ import { getAppearance, getAppSettings } from '@/lib/settings/queries';
 import { SETTINGS_TAB_LABELS, SETTINGS_TABS, isSettingsTab, type AppSettingsView, type SettingsTab } from '@/lib/settings/types';
 import { AppearanceForm } from '../../_components/appearance-form';
 import {
-  AttendanceSettingsForm,
   LoginSettingsForm,
-  OfficeIpSettingsForm,
   ProtectionSettingsForm,
 } from '../../_components/settings-form';
 import { ListSkeleton, PageHeader } from '../../_components/ui';
@@ -66,8 +62,6 @@ async function SettingsContent({ searchParams }: { searchParams: SearchParams })
 const TAB_ICONS: Record<SettingsTab, LucideIcon> = {
   tampilan: Palette,
   login: LogIn,
-  'ip-kantor': Network,
-  'daftar-hadir': ClipboardCheck,
   proteksi: ShieldCheck,
 };
 
@@ -96,8 +90,8 @@ function TabNav({ active, protectionWarning }: { active: SettingsTab; protection
                 <Icon className="size-4" />
                 {SETTINGS_TAB_LABELS[t]}
                 {t === 'proteksi' && protectionWarning && (
-                  <span className="size-1.5 rounded-full bg-amber-500">
-                    <span className="sr-only">(reCAPTCHA nonaktif)</span>
+                  <span className="size-1.5 rounded-full bg-red-500">
+                    <span className="sr-only">(reCAPTCHA nonaktif, booking publik ditolak)</span>
                   </span>
                 )}
               </Link>
@@ -118,26 +112,11 @@ async function TabPanel({ tab, settings: s }: { tab: SettingsTab; settings: AppS
           initial={{ loginRateMax: s.loginRateMax, loginIpRateMax: s.loginIpRateMax, loginRateWindowMin: s.loginRateWindowMin }}
         />
       );
-    case 'ip-kantor':
-      return (
-        <OfficeIpSettingsForm
-          initial={{ officeIpCheck: s.officeIpCheck, officeAllowedIps: s.officeAllowedIps, trustedIpHeader: s.trustedIpHeader }}
-          headerOptions={s.trustedIpHeaderOptions}
-        />
-      );
-    case 'daftar-hadir':
-      return (
-        <AttendanceSettingsForm
-          initial={{
-            publicAttendanceMaxPerBooking: s.publicAttendanceMaxPerBooking,
-            attendanceDeviceCooldownMin: s.attendanceDeviceCooldownMin,
-          }}
-        />
-      );
     case 'proteksi':
       return (
         <ProtectionSettingsForm
           initial={{
+            trustedIpHeader: s.trustedIpHeader,
             publicMutationRateMax: s.publicMutationRateMax,
             publicMutationRateWindowMin: s.publicMutationRateWindowMin,
             publicPageRateMax: s.publicPageRateMax,
@@ -147,6 +126,7 @@ async function TabPanel({ tab, settings: s }: { tab: SettingsTab; settings: AppS
             recaptchaMinScore: s.recaptchaMinScore,
             recaptchaSecretSet: s.recaptchaSecretSet,
           }}
+          headerOptions={s.trustedIpHeaderOptions}
         />
       );
     default:

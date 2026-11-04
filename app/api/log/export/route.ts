@@ -2,15 +2,8 @@ import type { NextRequest } from 'next/server';
 import { z } from 'zod';
 
 import { authorizeUser, canAccessRoom, getRoomScope } from '@/lib/auth/access';
-import {
-  LOG_MAX_ATTENDEES,
-  LOG_MAX_ROWS,
-  parseLogFilters,
-  resolveRange,
-  toAttendeeExport,
-  toExportRows,
-} from '@/lib/booking/log';
-import { getLogAttendees, getLogBookings } from '@/lib/booking/queries';
+import { LOG_MAX_ROWS, parseLogFilters, resolveRange, toExportRows } from '@/lib/booking/log';
+import { getLogBookings } from '@/lib/booking/queries';
 import { getAppearance } from '@/lib/settings/queries';
 
 const formatSchema = z.enum(['xlsx', 'pdf']);
@@ -34,7 +27,7 @@ export async function GET(request: NextRequest): Promise<Response> {
     return jsonError(403, 'Permintaan lintas situs ditolak.');
   }
 
-  // Second gate after the proxy IP allowlist; the session read also defers the clock (io()).
+  // Session + role gate; the session read also defers the clock (io()).
   const user = await authorizeUser();
   if (!user) return jsonError(401, 'Tidak diizinkan.');
 
@@ -60,15 +53,7 @@ export async function GET(request: NextRequest): Promise<Response> {
       `Data terlalu banyak (lebih dari ${LOG_MAX_ROWS} reservasi). Persempit filter terlebih dahulu.`,
     );
   }
-  const attendees = await getLogAttendees(range, filter);
-  if (attendees.truncated) {
-    return jsonError(
-      413,
-      `Data daftar hadir terlalu banyak (lebih dari ${LOG_MAX_ATTENDEES} baris). Persempit filter terlebih dahulu.`,
-    );
-  }
   const rows = toExportRows(bookings);
-  const { sheetRows, linesByRow } = toAttendeeExport(bookings, attendees.rows);
 
   const { buildLogPdf, buildLogXlsx } = await import('@/lib/booking/log-export');
   const title = `Log Reservasi ${filters.year}`;
@@ -76,8 +61,8 @@ export async function GET(request: NextRequest): Promise<Response> {
   const { appName, institutionName } = await getAppearance();
   const body =
     format.data === 'xlsx'
-      ? await buildLogXlsx(rows, title, sheetRows)
-      : await buildLogPdf(rows, `${institutionName ?? appName} - ${title}`, linesByRow);
+      ? await buildLogXlsx(rows, title)
+      : await buildLogPdf(rows, `${institutionName ?? appName} - ${title}`);
 
   return new Response(body, {
     headers: {

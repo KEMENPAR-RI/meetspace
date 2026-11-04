@@ -2,21 +2,11 @@ import { Suspense } from 'react';
 import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 import { io } from 'next/cache';
-import { CalendarClock, Clock, DoorOpen, Lock, LockOpen, PenLine, UserRound } from 'lucide-react';
-import { signAttendance } from '@/app/actions/attendance';
+import { Clock, DoorOpen, UserRound } from 'lucide-react';
 import { requireBookingAccess } from '@/lib/auth/access';
-import {
-  ATTENDANCE_CLOSE_AFTER_MS,
-  ATTENDANCE_OPEN_BEFORE_MS,
-  isAttendanceOpen,
-} from '@/lib/booking/attendance-window';
-import { getBookingAttendance } from '@/lib/booking/queries';
-import type { Attendee } from '@/lib/booking/types';
-import { formatDateLabel, formatTime, formatTimeRange, getBookingStatus } from '@/lib/booking/time';
-import { AttendanceForm } from '@/app/_components/attendance-form';
-import { AttendeeList } from '@/app/_components/attendee-list';
+import { getBookingDetail } from '@/lib/booking/queries';
+import { formatDateLabel, formatTimeRange, getBookingStatus } from '@/lib/booking/time';
 import { BackLink } from '@/app/_components/back-link';
-import { ExportButtons } from '@/app/_components/export-buttons';
 import { StatusBadge } from '@/app/_components/status-badge';
 import { ListSkeleton, cardClass } from '../../../_components/ui';
 
@@ -39,22 +29,10 @@ async function MeetingContent({ params }: { params: Params }) {
 
   // Must precede DB queries and `new Date()` under Cache Components.
   await io();
-  const data = await getBookingAttendance(id);
-  if (!data) notFound();
+  const booking = await getBookingDetail(id);
+  if (!booking) notFound();
 
-  const { booking } = data;
   const now = new Date();
-  const open = isAttendanceOpen(booking.startsAt, booking.endsAt, now);
-  const attendees = data.attendees.map((a) => ({
-    id: a.id,
-    name: a.name,
-    satker: a.satker,
-    role: a.role,
-    gender: a.gender,
-    phone: a.phone,
-    signedAtISO: a.signedAt.toISOString(),
-    signedAtLabel: `${formatDateLabel(a.signedAt)}, ${formatTime(a.signedAt)} WIB`,
-  })) satisfies Attendee[];
 
   return (
     <div className="space-y-8">
@@ -78,10 +56,6 @@ async function MeetingContent({ params }: { params: Params }) {
             endsAt={booking.endsAt.toISOString()}
             initialStatus={getBookingStatus(booking.startsAt, booking.endsAt, now)}
           />
-          <span className={`inline-flex items-center gap-1 text-xs font-medium ${open ? 'text-emerald-700' : 'text-zinc-500'}`}>
-            {open ? <LockOpen className="size-3.5" /> : <Lock className="size-3.5" />}
-            {open ? 'Daftar hadir dibuka' : 'Daftar hadir ditutup'}
-          </span>
         </div>
         <p className="mt-3 flex flex-wrap items-center gap-x-1.5 text-sm text-zinc-600">
           <UserRound className="size-4 shrink-0 text-zinc-400" />
@@ -91,47 +65,7 @@ async function MeetingContent({ params }: { params: Params }) {
           {booking.satker}
         </p>
         <p className="mt-2 whitespace-pre-line break-words text-sm text-zinc-700">{booking.agenda}</p>
-
-        <div className="mt-4 flex flex-wrap items-start gap-3 border-t border-zinc-100 pt-4">
-          <div className="sm:ml-auto">
-            <ExportButtons
-              endpoint={`/api/rapat/${booking.id}/export`}
-              searchParams=""
-              label="Ekspor daftar hadir rapat ini"
-            />
-          </div>
-        </div>
       </section>
-
-      <div className="grid grid-cols-1 gap-8 lg:grid-cols-[minmax(0,26rem)_minmax(0,1fr)] lg:items-start">
-        <section aria-labelledby="sign-heading" className={`${cardClass} lg:sticky lg:top-8`}>
-          <h2 id="sign-heading" className="mb-5 flex items-center gap-2 text-lg font-semibold text-primary">
-            <PenLine className="size-5" />
-            Isi Daftar Hadir
-          </h2>
-          {open ? (
-            <AttendanceForm action={signAttendance.bind(null, booking.id)} variant="internal" />
-          ) : (
-            <ClosedNotice startsAt={booking.startsAt} endsAt={booking.endsAt} now={now} />
-          )}
-        </section>
-
-        <AttendeeList attendees={attendees} showPhone canDelete />
-      </div>
-    </div>
-  );
-}
-
-function ClosedNotice({ startsAt, endsAt, now }: { startsAt: Date; endsAt: Date; now: Date }) {
-  const opensAt = new Date(startsAt.getTime() - ATTENDANCE_OPEN_BEFORE_MS);
-  const closesAt = new Date(endsAt.getTime() + ATTENDANCE_CLOSE_AFTER_MS);
-  return (
-    <div role="status" className="rounded-xl border border-dashed border-zinc-300 px-4 py-6 text-center">
-      <CalendarClock className="mx-auto mb-2 size-6 text-zinc-400" />
-      <p className="text-sm font-semibold text-primary">
-        {now < opensAt ? 'Daftar hadir belum dibuka' : 'Daftar hadir sudah ditutup'}
-      </p>
-      <p className="mt-1 text-sm tabular-nums text-zinc-600">Dibuka {formatTimeRange(opensAt, closesAt)}</p>
     </div>
   );
 }

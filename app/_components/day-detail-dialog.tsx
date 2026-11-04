@@ -110,15 +110,12 @@ export function DayDetailDialog({ day, rooms, onClose }: Props) {
               {/* Plain text only; line breaks kept via CSS */}
               <p className="mt-2 whitespace-pre-line break-words text-sm text-zinc-700">{e.agenda}</p>
               <div className="mt-3 flex flex-wrap items-start justify-end gap-2">
-                <span className="mr-auto self-center rounded-full bg-secondary/40 px-2.5 py-0.5 text-xs font-semibold tabular-nums text-primary">
-                  {e.attendeeCount} hadir
-                </span>
                 <Link
                   href={`/dashboard/rapat/${e.id}`}
-                  aria-label={`Daftar hadir reservasi ${e.bookerName} ${e.startLabel}–${e.endLabel}`}
+                  aria-label={`Detail reservasi ${e.bookerName} ${e.startLabel}–${e.endLabel}`}
                   className="rounded-md border border-primary/30 bg-white px-2.5 py-1 text-xs font-medium text-primary hover:bg-primary/5 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary motion-safe:transition-colors"
                 >
-                  Daftar hadir
+                  Detail
                 </Link>
                 <button
                   type="button"

@@ -3,14 +3,14 @@ import { NextResponse, type NextRequest } from 'next/server';
 import { resolveLoginIpKey } from '@/lib/auth/login-rate-limit';
 import { SESSION_COOKIE } from '@/lib/auth/session';
 import { findSessionUser } from '@/lib/auth/session-store';
-import { FORBIDDEN_HTML, TOO_MANY_HTML } from '@/lib/forbidden-html';
-import { checkOfficeAccess, getClientIpKey, isOfficeIp } from '@/lib/office-access';
+import { TOO_MANY_HTML } from '@/lib/forbidden-html';
+import { getClientIpKey } from '@/lib/office-access';
 import { consumePublicPageQuota } from '@/lib/public-rate-limit';
-import { isDashboardPath, isPublicAttendancePath } from '@/lib/public-paths';
+import { isPublicPath } from '@/lib/public-paths';
 import { getAppSettings } from '@/lib/settings/queries';
 
-const PUBLIC_METHODS = new Set(['GET', 'HEAD', 'POST']);
 const PAGE_METHODS = new Set(['GET', 'HEAD']);
+const LOGO_PATH = '/api/logo';
 
 const HTML_HEADERS = {
   'content-type': 'text/html; charset=utf-8',
@@ -20,35 +20,28 @@ const HTML_HEADERS = {
 
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
-  // POST is needed for Server Actions; public actions re-check office access, dashboard ones check the session/role.
-  if (isPublicAttendancePath(pathname) && PUBLIC_METHODS.has(request.method)) {
-    // Server Action POSTs (next-action header) are rate limited inside the actions; a plain POST renders the
-    // page like a GET, so it counts here too (no 405: no-JS action submits carry no next-action header).
-    if (PAGE_METHODS.has(request.method) || !request.headers.has('next-action')) {
-      const retryAfterS = await publicPageRetryAfter(request);
-      if (retryAfterS !== null) {
-        return new Response(TOO_MANY_HTML, {
-          status: 429,
-          headers: { ...HTML_HEADERS, 'retry-after': String(retryAfterS) },
-        });
-      }
-    }
-    return NextResponse.next();
-  }
-  if (isDashboardPath(pathname) && PUBLIC_METHODS.has(request.method)) return NextResponse.next();
-  if ((await checkOfficeAccess(request.headers)).allowed) return NextResponse.next();
+  if (!isPublicPath(pathname) || !countsAsPageView(request, pathname)) return NextResponse.next();
+  const retryAfterS = await publicPageRetryAfter(request);
+  if (retryAfterS === null) return NextResponse.next();
+  return new Response(TOO_MANY_HTML, {
+    status: 429,
+    headers: { ...HTML_HEADERS, 'retry-after': String(retryAfterS) },
+  });
+}
 
-  // Direct 403 body: no /forbidden route, so no redirect loop and no 200 for outsiders.
-  return new Response(FORBIDDEN_HTML, { status: 403, headers: HTML_HEADERS });
+// GET/HEAD always; on pages also a plain POST (rendered like a GET). Server Actions (`next-action`) are limited
+// inside the action; /api/logo stays GET/HEAD only (its route rejects POST).
+function countsAsPageView(request: NextRequest, pathname: string): boolean {
+  if (PAGE_METHODS.has(request.method)) return true;
+  return pathname !== LOGO_PATH && !request.headers.has('next-action');
 }
 
 // Per-IP limit for public GET pages; null = allowed, else Retry-After seconds.
-// Office allowlist IPs are exempt; over the limit, a valid session still passes (checked only then: no DB per view).
+// Over the limit, a valid session still passes (checked only then: no DB per view).
 async function publicPageRetryAfter(request: NextRequest): Promise<number | null> {
   let settings;
   try {
     settings = await getAppSettings();
-    if (await isOfficeIp(request.headers)) return null;
   } catch (error) {
     // Settings unavailable: the page fails on its own DB reads; the in-memory limiter needs the header setting.
     console.error('[proxy] public page limit skipped: settings unavailable', error);
@@ -76,5 +69,6 @@ async function hasValidSession(request: NextRequest): Promise<boolean> {
 }
 
 export const config = {
-  matcher: ['/((?!_next/static/|images/).*)'],
+  // Only the rate-limited pages (see lib/public-paths.ts); everything else skips the proxy.
+  matcher: ['/', '/ruang/:id', '/api/logo'],
 };

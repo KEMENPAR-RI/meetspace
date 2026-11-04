@@ -1,6 +1,6 @@
 import { FixedWindow } from '@/lib/auth/login-rate-limit';
 
-// Public GET pages (/hadir/<roomId>, /api/logo) per IP key, in memory (per instance, reset on restart):
+// Public pages (/, /ruang/[id], /api/logo) per IP key, in memory (per instance, reset on restart):
 // a DB write per page view is too heavy for the 1GB VPS. Mutations use the DB limiter in lib/rate-limit.ts.
 const byIp = new FixedWindow();
 

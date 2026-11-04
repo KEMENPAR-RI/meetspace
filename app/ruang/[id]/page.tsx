@@ -1,9 +1,8 @@
 import { Suspense } from 'react';
 import type { Metadata } from 'next';
-import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { io } from 'next/cache';
-import { CalendarClock, CalendarPlus, ChevronRight, DoorClosed, DoorOpen } from 'lucide-react';
+import { CalendarClock, CalendarPlus, DoorClosed, DoorOpen } from 'lucide-react';
 import { createBooking } from '@/app/actions/booking';
 import { findPublicRoomById } from '@/lib/room/queries';
 import { getRecaptchaSiteKey } from '@/lib/settings/recaptcha';
@@ -24,7 +23,9 @@ export default function RoomPage({ params }: { params: Params }) {
       <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-10 font-sans sm:px-6 lg:py-14">
         <SiteHeader />
         <div className="mb-4">
-          <BackLink href="/">Semua ruangan</BackLink>
+          <BackLink href="/" prefetch={false}>
+            Semua ruangan
+          </BackLink>
         </div>
         <Suspense fallback={<RoomSkeleton />}>
           <RoomContent params={params} />
@@ -87,7 +88,6 @@ async function RoomContent({ params }: { params: Params }) {
             <Suspense fallback={<BookingListSkeleton />}>
               <BookingList roomId={room.id} />
             </Suspense>
-            <PastLink roomId={room.id} />
           </section>
         </div>
       ) : (
@@ -105,23 +105,13 @@ async function RoomContent({ params }: { params: Params }) {
             Ruangan ini sedang tidak dapat dibooking. Silakan pilih ruangan lain.
           </p>
           <div className="mt-5">
-            <BackLink href="/">Pilih ruangan lain</BackLink>
+            <BackLink href="/" prefetch={false}>
+              Pilih ruangan lain
+            </BackLink>
           </div>
         </section>
       )}
     </div>
-  );
-}
-
-function PastLink({ roomId }: { roomId: string }) {
-  return (
-    <Link
-      href={`/ruang/${roomId}/rapat`}
-      className="mt-4 inline-flex items-center gap-1 rounded text-sm font-medium text-primary hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
-    >
-      Lihat rapat sebelumnya
-      <ChevronRight className="size-4" />
-    </Link>
   );
 }
 

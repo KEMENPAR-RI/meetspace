@@ -10,7 +10,7 @@ import {
 } from './time';
 import { isUuid } from '@/lib/uuid';
 
-import { BOOKING_LIMITS, attendeeRoleLabel, genderCode, type Gender, type LogBooking } from './types';
+import { BOOKING_LIMITS, type LogBooking } from './types';
 
 // Shared contract for the reservation log page, its client components, and the export route.
 
@@ -34,7 +34,6 @@ export type LogEntry = {
   bookerName: string;
   satker: string;
   agenda: string;
-  attendeeCount: number;
   roomId: string;
   roomName: string;
 };
@@ -49,8 +48,6 @@ export const LOG_YEAR_MIN = 2000;
 export const LOG_YEAR_MAX = 2100;
 // Hard cap for the log page and export; above it the user must narrow the filter.
 export const LOG_MAX_ROWS = 5000;
-// Attendee rows cap for the export.
-export const LOG_MAX_ATTENDEES = 20000;
 export { RESET_CONFIRMATION } from './types';
 
 // Rejects C0 controls and DEL (Postgres rejects NUL).
@@ -125,7 +122,6 @@ function toLogEntry(row: LogBooking): LogEntry {
     bookerName: row.bookerName,
     satker: row.satker,
     agenda: row.agenda,
-    attendeeCount: row.attendeeCount,
     roomId: row.roomId,
     roomName: row.room.name,
   };
@@ -156,7 +152,6 @@ export const EXPORT_COLUMNS = [
   'Ruangan',
   'Pemesan',
   'Satker/Instansi',
-  'Jumlah Hadir',
   'Agenda',
 ] as const;
 
@@ -172,7 +167,6 @@ export function toExportRows(rows: LogBooking[]): string[][] {
       row.room.name,
       row.bookerName,
       row.satker,
-      String(row.attendeeCount),
       row.agenda,
     ]),
   ];
@@ -180,73 +174,4 @@ export function toExportRows(rows: LogBooking[]): string[][] {
 
 function sortByStart(rows: LogBooking[]): LogBooking[] {
   return [...rows].sort((a, b) => a.startsAt.getTime() - b.startsAt.getTime());
-}
-
-export const ATTENDEE_EXPORT_COLUMNS = [
-  'Tanggal',
-  'Jam Mulai',
-  'Jam Selesai',
-  'Ruangan',
-  'Agenda',
-  'Pemesan',
-  'Nama Peserta',
-  'Jenis Kelamin',
-  'Satker/Instansi',
-  'Sebagai',
-  'Waktu Hadir',
-] as const;
-
-export type ExportAttendee = {
-  bookingId: string;
-  name: string;
-  satker: string;
-  gender: Gender | null;
-  role: string | null;
-  signedAt: Date;
-};
-
-// sheetRows: header + one row per attendee. linesByRow: PDF sub-rows aligned with toExportRows' body.
-// `attendees` must be in signing order (getLogAttendees). Attendees of bookings outside the set
-// (race between the two reads) are skipped.
-export function toAttendeeExport(
-  bookings: LogBooking[],
-  attendees: ExportAttendee[],
-): { sheetRows: string[][]; linesByRow: string[][] } {
-  const byBooking = new Map<string, ExportAttendee[]>();
-  for (const a of attendees) {
-    const list = byBooking.get(a.bookingId);
-    if (list) list.push(a);
-    else byBooking.set(a.bookingId, [a]);
-  }
-
-  const sheetRows: string[][] = [[...ATTENDEE_EXPORT_COLUMNS]];
-  const linesByRow: string[][] = [];
-  for (const b of sortByStart(bookings)) {
-    const list = byBooking.get(b.id) ?? [];
-    const date = toJakartaDateString(b.startsAt);
-    const start = formatTime(b.startsAt);
-    const end = formatTime(b.endsAt);
-    const lines: string[] = [];
-    list.forEach((a, i) => {
-      const signedDate = toJakartaDateString(a.signedAt);
-      const signedTime = formatTime(a.signedAt);
-      const role = attendeeRoleLabel(a.role);
-      sheetRows.push([
-        date,
-        start,
-        end,
-        b.room.name,
-        b.agenda,
-        b.bookerName,
-        a.name,
-        genderCode(a.gender),
-        a.satker,
-        role,
-        `${signedDate} ${signedTime}`,
-      ]);
-      lines.push(`${i + 1}. ${a.name} (${genderCode(a.gender)}) · ${a.satker} · ${role} · ${signedTime}, ${signedDate}`);
-    });
-    linesByRow.push(lines);
-  }
-  return { sheetRows, linesByRow };
 }

@@ -16,7 +16,7 @@ import { parseSettingsTab, readSettingsValues } from '@/lib/settings/validation'
 const editableTab = z.enum(SETTINGS_TABS).exclude(['tampilan']);
 
 // Superadmin only. `tab` is bound on the client: validated here. Saves only that tab's fields
-// (SETTINGS_TAB_FIELDS); checkboxes officeIpCheck/recaptchaEnabled use value="1"; empty recaptchaSecretKey = keep.
+// (SETTINGS_TAB_FIELDS); checkbox recaptchaEnabled uses value="1"; empty recaptchaSecretKey = keep.
 export async function updateSettingsTab(
   tab: SettingsTab,
   _prevState: FormState<SettingsField>,

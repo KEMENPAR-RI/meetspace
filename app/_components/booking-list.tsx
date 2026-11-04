@@ -1,4 +1,3 @@
-import Link from 'next/link';
 import { io } from 'next/cache';
 import { CalendarX2 } from 'lucide-react';
 import { getUpcomingBookings } from '@/lib/booking/queries';
@@ -49,15 +48,6 @@ export async function BookingList({ roomId }: { roomId: string }) {
           </p>
           {/* Plain text only; line breaks kept via CSS */}
           <p className="mt-2 whitespace-pre-line break-words text-sm text-zinc-700">{b.agenda}</p>
-          <div className="mt-3">
-            <Link
-              href={`/rapat/${b.id}`}
-              aria-label={`Daftar hadir rapat ${b.bookerName} ${formatTimeRange(b.startsAt, b.endsAt)}`}
-              className="inline-flex items-center rounded-md border border-primary/30 bg-white px-2.5 py-1 text-xs font-medium text-primary hover:bg-primary/5 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary motion-safe:transition-colors"
-            >
-              Daftar hadir
-            </Link>
-          </div>
         </li>
       ))}
     </ul>

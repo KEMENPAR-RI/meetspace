@@ -14,7 +14,6 @@ import {
   type LogoMime,
   type PrimaryColor,
 } from './types';
-import { normalizeAllowlist } from './validation';
 
 // Pure key-value codec for app_settings rows { key, value }: every rule the DB used to enforce
 // (CHECK ranges, logo mime/size, color preset) is checked here. Missing/invalid keys fall back to defaults.
@@ -23,11 +22,7 @@ export const SETTING_KEYS = {
   loginRateMax: 'login_rate_max',
   loginIpRateMax: 'login_ip_rate_max',
   loginRateWindowMin: 'login_rate_window_min',
-  officeIpCheck: 'office_ip_check',
-  officeAllowedIps: 'office_allowed_ips',
   trustedIpHeader: 'trusted_ip_header',
-  publicAttendanceMaxPerBooking: 'public_attendance_max_per_booking',
-  attendanceDeviceCooldownMin: 'attendance_device_cooldown_min',
   publicMutationRateMax: 'public_mutation_rate_max',
   publicMutationRateWindowMin: 'public_mutation_rate_window_min',
   publicPageRateMax: 'public_page_rate_max',
@@ -82,8 +77,6 @@ const schemas = {
   loginRateMax: int(SETTINGS_LIMITS.loginRateMax),
   loginIpRateMax: int(SETTINGS_LIMITS.loginIpRateMax),
   loginRateWindowMin: int(SETTINGS_LIMITS.loginRateWindowMin),
-  publicAttendanceMaxPerBooking: int(SETTINGS_LIMITS.publicAttendanceMaxPerBooking),
-  attendanceDeviceCooldownMin: int(SETTINGS_LIMITS.attendanceDeviceCooldownMin),
   publicMutationRateMax: int(SETTINGS_LIMITS.publicMutationRateMax),
   publicMutationRateWindowMin: int(SETTINGS_LIMITS.publicMutationRateWindowMin),
   publicPageRateMax: int(SETTINGS_LIMITS.publicPageRateMax),
@@ -95,15 +88,6 @@ const schemas = {
     .string()
     .regex(/^(0(\.\d{1,2})?|1(\.0{1,2})?)$/)
     .transform(Number),
-  officeIpCheck: z.enum(['true', 'false']).transform((v) => v === 'true'),
-  officeAllowedIps: z.string().transform((v, ctx) => {
-    const r = normalizeAllowlist(v);
-    if (!r.ok) {
-      ctx.addIssue({ code: 'custom', message: r.message });
-      return z.NEVER;
-    }
-    return r.value;
-  }),
   appName: z
     .string()
     .trim()
@@ -136,7 +120,7 @@ export function decodeSettings(rows: readonly SettingRow[]): DecodedSettings {
   const K = SETTING_KEYS;
   const D = DEFAULT_APP_SETTINGS;
 
-  // Missing header key -> default; a stored but unsupported header -> '' (office check fails closed).
+  // Missing header key -> default; a stored but unsupported header -> '' (no client IP: per-IP limits fail closed).
   const rawHeader = map.get(K.trustedIpHeader);
   const header = rawHeader === undefined ? D.trustedIpHeader : rawHeader.trim().toLowerCase();
 
@@ -153,23 +137,9 @@ export function decodeSettings(rows: readonly SettingRow[]): DecodedSettings {
     loginRateMax: pick(map, K.loginRateMax, schemas.loginRateMax, D.loginRateMax),
     loginIpRateMax: pick(map, K.loginIpRateMax, schemas.loginIpRateMax, D.loginIpRateMax),
     loginRateWindowMin: pick(map, K.loginRateWindowMin, schemas.loginRateWindowMin, D.loginRateWindowMin),
-    officeIpCheck: pick(map, K.officeIpCheck, schemas.officeIpCheck, D.officeIpCheck),
-    officeAllowedIps: pick(map, K.officeAllowedIps, schemas.officeAllowedIps, D.officeAllowedIps),
     trustedIpHeader: (TRUSTED_IP_HEADERS as readonly string[]).includes(header)
       ? (header as AppSettings['trustedIpHeader'])
       : '',
-    publicAttendanceMaxPerBooking: pick(
-      map,
-      K.publicAttendanceMaxPerBooking,
-      schemas.publicAttendanceMaxPerBooking,
-      D.publicAttendanceMaxPerBooking,
-    ),
-    attendanceDeviceCooldownMin: pick(
-      map,
-      K.attendanceDeviceCooldownMin,
-      schemas.attendanceDeviceCooldownMin,
-      D.attendanceDeviceCooldownMin,
-    ),
     publicMutationRateMax: pick(map, K.publicMutationRateMax, schemas.publicMutationRateMax, D.publicMutationRateMax),
     publicMutationRateWindowMin: pick(
       map,
@@ -238,12 +208,6 @@ export function encodeSettings(patch: SettingsPatch, updatedById: string, now: D
   if (patch.loginRateWindowMin !== undefined) {
     put(K.loginRateWindowMin, schemas.loginRateWindowMin, String(patch.loginRateWindowMin));
   }
-  if (patch.publicAttendanceMaxPerBooking !== undefined) {
-    put(K.publicAttendanceMaxPerBooking, schemas.publicAttendanceMaxPerBooking, String(patch.publicAttendanceMaxPerBooking));
-  }
-  if (patch.attendanceDeviceCooldownMin !== undefined) {
-    put(K.attendanceDeviceCooldownMin, schemas.attendanceDeviceCooldownMin, String(patch.attendanceDeviceCooldownMin));
-  }
   if (patch.publicMutationRateMax !== undefined) {
     put(K.publicMutationRateMax, schemas.publicMutationRateMax, String(patch.publicMutationRateMax));
   }
@@ -258,8 +222,6 @@ export function encodeSettings(patch: SettingsPatch, updatedById: string, now: D
   if (patch.recaptchaSiteKey !== undefined) put(K.recaptchaSiteKey, schemas.recaptchaKey, patch.recaptchaSiteKey);
   if (patch.recaptchaSecretKey !== undefined) put(K.recaptchaSecretKey, schemas.recaptchaKey, patch.recaptchaSecretKey);
   if (patch.recaptchaMinScore !== undefined) put(K.recaptchaMinScore, schemas.recaptchaMinScore, String(patch.recaptchaMinScore));
-  if (patch.officeIpCheck !== undefined) put(K.officeIpCheck, schemas.officeIpCheck, String(patch.officeIpCheck));
-  if (patch.officeAllowedIps !== undefined) put(K.officeAllowedIps, schemas.officeAllowedIps, patch.officeAllowedIps);
   if (patch.trustedIpHeader !== undefined) put(K.trustedIpHeader, z.enum(TRUSTED_IP_HEADERS), patch.trustedIpHeader);
   if (patch.appName !== undefined) put(K.appName, schemas.appName, patch.appName);
   if (patch.institutionName !== undefined) put(K.institutionName, schemas.institutionName, patch.institutionName ?? '');

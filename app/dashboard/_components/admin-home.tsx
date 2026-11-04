@@ -3,12 +3,10 @@ import {
   CalendarCheck,
   CalendarClock,
   CalendarX2,
-  ClipboardCheck,
   DoorOpen,
   Eye,
   Radio,
   TriangleAlert,
-  Users,
 } from 'lucide-react';
 import { RoomMeta } from '@/app/_components/room-meta';
 import { StatusBadge } from '@/app/_components/status-badge';
@@ -78,15 +76,10 @@ export function AdminHome({ data, now }: { data: AdminHomeData; now: Date }) {
               <span className="sr-only">Satker/Instansi: </span>
               {current.satker}
             </p>
-            <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-zinc-100 pt-4">
-              <p className="flex items-center gap-2 text-sm text-zinc-700">
-                <Users className="size-5 text-zinc-400" />
-                <span className="text-2xl font-semibold tabular-nums text-primary">{current.attendeeCount}</span> peserta
-                hadir
-              </p>
+            <div className="mt-4 flex justify-end border-t border-zinc-100 pt-4">
               <Link href={`/dashboard/rapat/${current.id}`} className={primaryButton}>
-                <ClipboardCheck className="size-4" />
-                Lihat daftar hadir
+                <Eye className="size-4" />
+                Detail rapat
               </Link>
             </div>
           </div>

@@ -1,6 +1,6 @@
 import { redirect } from 'next/navigation';
 
-// Past meetings now live per room (/ruang/[id]/rapat).
+// Legacy path; no public meeting list anymore.
 export default function LegacyPastMeetingsPage() {
   redirect('/');
 }

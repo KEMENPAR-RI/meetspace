@@ -32,8 +32,6 @@ type NumberKey =
   | 'loginRateMax'
   | 'loginIpRateMax'
   | 'loginRateWindowMin'
-  | 'publicAttendanceMaxPerBooking'
-  | 'attendanceDeviceCooldownMin'
   | 'publicMutationRateMax'
   | 'publicMutationRateWindowMin'
   | 'publicPageRateMax'
@@ -129,162 +127,10 @@ export function LoginSettingsForm({ initial }: { initial: Pick<AppSettingsView, 
   );
 }
 
-// ---- Akses IP kantor ----
-
-type OfficeKeys = 'officeIpCheck' | 'officeAllowedIps' | 'trustedIpHeader';
-
-export function OfficeIpSettingsForm({
-  initial,
-  headerOptions,
-}: {
-  initial: Pick<AppSettingsView, OfficeKeys>;
-  headerOptions: TrustedIpHeader[];
-}) {
-  const { state, formAction, pending, errors, text, checked } = useTabForm<OfficeKeys>('ip-kantor', initial);
-  const [ipCheck, setIpCheck] = useState(checked('officeIpCheck'));
-  const [ips, setIps] = useState(text('officeAllowedIps'));
-  const ipsEmpty = ips.split(/[\s,]+/).every((s) => s.trim() === '');
-  const header = text('trustedIpHeader');
-  const [pickedHeader, setPickedHeader] = useState(header);
-
-  return (
-    <form action={formAction} className="space-y-6">
-      <FormMessage state={state} />
-      <TabCard
-        id="sec-ip"
-        title="Akses IP kantor"
-        description={
-          <>
-            Membatasi halaman booking publik ke jaringan kantor. Dashboard, login, dan daftar hadir (
-            <code className="font-mono text-xs">/hadir</code>) tidak terkena cek IP.
-          </>
-        }
-      >
-        <div className="space-y-5">
-          <label className="flex cursor-pointer items-start gap-3">
-            <input
-              type="checkbox"
-              name="officeIpCheck"
-              value="1"
-              checked={ipCheck}
-              onChange={(e) => setIpCheck(e.currentTarget.checked)}
-              className="mt-0.5 size-4 rounded border-zinc-300 accent-primary"
-            />
-            <span className="text-sm">
-              <span className="block font-medium text-zinc-800">Aktifkan cek IP kantor</span>
-              <span className="block text-xs text-zinc-500">Nonaktif = booking publik bisa diakses dari jaringan mana pun.</span>
-            </span>
-          </label>
-          {errors.officeIpCheck && <p className="text-sm text-red-600">{errors.officeIpCheck}</p>}
-
-          {ipCheck && ipsEmpty && (
-            <p role="alert" className="flex items-start gap-2 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900">
-              <TriangleAlert className="mt-0.5 size-4 shrink-0 text-amber-600" />
-              <span className="min-w-0">
-                <span className="font-semibold">Daftar IP kosong.</span> Dengan cek IP aktif, semua akses dan booking dari halaman publik akan ditolak.
-              </span>
-            </p>
-          )}
-
-          <Field
-            label="IP / CIDR yang diizinkan"
-            id="set-officeAllowedIps"
-            error={errors.officeAllowedIps}
-            hint="Satu per baris atau pisahkan dengan koma, mis. 10.0.0.0/8 atau 203.0.113.7. IP di daftar ini juga dikecualikan dari batas request per IP (tab Proteksi publik)."
-          >
-            <textarea
-              name="officeAllowedIps"
-              rows={5}
-              maxLength={SETTINGS_LIMITS.officeAllowedIps}
-              value={ips}
-              onChange={(e) => setIps(e.currentTarget.value)}
-              spellCheck={false}
-              className={`${inputClass} resize-y font-mono`}
-              {...fieldAria('set-officeAllowedIps', errors.officeAllowedIps, true)}
-            />
-          </Field>
-
-          <Field
-            label="Header IP tepercaya"
-            id="set-trustedIpHeader"
-            error={errors.trustedIpHeader}
-            hint="Header yang diisi reverse proxy dengan IP klien asli; dipakai untuk cek IP kantor dan batas request per IP. X-Real-IP/X-Forwarded-For harus di-set (ditimpa) oleh nginx, bukan diteruskan dari klien."
-          >
-            <select
-              name="trustedIpHeader"
-              value={pickedHeader}
-              onChange={(e) => setPickedHeader(e.currentTarget.value)}
-              className={inputClass}
-              {...fieldAria('set-trustedIpHeader', errors.trustedIpHeader, true)}
-            >
-              {/* Stored value invalid: force an explicit choice (office check fails closed meanwhile). */}
-              {!isTrustedIpHeader(header) && (
-                <option value="" disabled>
-                  Pilih header…
-                </option>
-              )}
-              {headerOptions.map((h) => (
-                <option key={h} value={h}>
-                  {TRUSTED_IP_HEADER_LABELS[h]}
-                </option>
-              ))}
-            </select>
-          </Field>
-          {pickedHeader === 'cf-connecting-ip' && (
-            <p role="alert" className="flex items-start gap-2 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900">
-              <TriangleAlert className="mt-0.5 size-4 shrink-0 text-amber-600" />
-              <span className="min-w-0">
-                <span className="font-semibold">Gunakan hanya bila server hanya menerima trafik dari Cloudflare;</span>{' '}
-                jika tidak, IP bisa dipalsukan.
-              </span>
-            </p>
-          )}
-        </div>
-      </TabCard>
-      <SaveBar pending={pending} />
-    </form>
-  );
-}
-
-// ---- Daftar hadir publik ----
-
-type AttendanceKeys = 'publicAttendanceMaxPerBooking' | 'attendanceDeviceCooldownMin';
-
-export function AttendanceSettingsForm({ initial }: { initial: Pick<AppSettingsView, AttendanceKeys> }) {
-  const { state, formAction, pending, errors, text } = useTabForm<AttendanceKeys>('daftar-hadir', initial);
-  return (
-    <form action={formAction} className="space-y-6">
-      <FormMessage state={state} />
-      <TabCard
-        id="sec-attendance"
-        title="Daftar hadir publik"
-        description="Berlaku untuk pengisian lewat kode QR tanpa login. Pengisian oleh admin di dashboard tidak terkena batas ini."
-      >
-        <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 sm:gap-4">
-          <NumberField
-            name="publicAttendanceMaxPerBooking"
-            label="Maksimal peserta per rapat"
-            hint={range('publicAttendanceMaxPerBooking', 'Peserta')}
-            error={errors.publicAttendanceMaxPerBooking}
-            defaultValue={text('publicAttendanceMaxPerBooking')}
-          />
-          <NumberField
-            name="attendanceDeviceCooldownMin"
-            label="Jeda isi ulang per perangkat"
-            hint={`${range('attendanceDeviceCooldownMin', 'Menit')} Admin yang login di perangkat itu tidak terkena jeda.`}
-            error={errors.attendanceDeviceCooldownMin}
-            defaultValue={text('attendanceDeviceCooldownMin')}
-          />
-        </div>
-      </TabCard>
-      <SaveBar pending={pending} />
-    </form>
-  );
-}
-
-// ---- Proteksi publik (rate limit + reCAPTCHA) ----
+// ---- Proteksi publik (IP klien + rate limit + reCAPTCHA) ----
 
 type ProtectionKeys =
+  | 'trustedIpHeader'
   | 'publicMutationRateMax'
   | 'publicMutationRateWindowMin'
   | 'publicPageRateMax'
@@ -295,19 +141,24 @@ type ProtectionKeys =
 
 export function ProtectionSettingsForm({
   initial,
+  headerOptions,
 }: {
   initial: Pick<AppSettingsView, ProtectionKeys | 'recaptchaSecretSet'>;
+  headerOptions: TrustedIpHeader[];
 }) {
   const { state, formAction, pending, errors, text, checked } = useTabForm<ProtectionKeys>('proteksi', initial);
+  const header = text('trustedIpHeader');
+  const [pickedHeader, setPickedHeader] = useState(header);
 
   return (
     <div className="space-y-6">
       {!initial.recaptchaEnabled && (
-        <div role="note" className="flex gap-3 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900">
-          <TriangleAlert className="mt-0.5 size-5 shrink-0 text-amber-600" />
+        <div role="alert" className="flex gap-3 rounded-xl border border-red-300 bg-red-50 px-4 py-3 text-sm text-red-900">
+          <TriangleAlert className="mt-0.5 size-5 shrink-0 text-red-600" />
           <p>
-            <span className="font-semibold">reCAPTCHA belum aktif.</span> Form daftar hadir, booking publik, dan login
-            dashboard belum terlindungi dari bot; hanya batas request per IP dan per perangkat yang berlaku.
+            <span className="font-semibold">reCAPTCHA belum aktif, booking publik ditolak.</span> Semua kiriman form
+            booking dari halaman publik ditolak sampai reCAPTCHA diaktifkan dengan site key dan secret key. Login
+            dashboard tetap berjalan.
           </p>
         </div>
       )}
@@ -316,20 +167,64 @@ export function ProtectionSettingsForm({
         <FormMessage state={state} />
 
         <TabCard
+          id="sec-ip"
+          title="Alamat IP klien"
+          description="Menentukan dari header mana alamat IP pengunjung dibaca."
+        >
+          <div className="space-y-5">
+            <Field
+              label="Header IP tepercaya"
+              id="set-trustedIpHeader"
+              error={errors.trustedIpHeader}
+              hint="Header yang diisi reverse proxy dengan IP klien asli; dipakai untuk batas login dan batas request per IP. Harus di-set (ditimpa) oleh nginx, bukan diteruskan dari klien."
+            >
+              <select
+                name="trustedIpHeader"
+                value={pickedHeader}
+                onChange={(e) => setPickedHeader(e.currentTarget.value)}
+                className={inputClass}
+                {...fieldAria('set-trustedIpHeader', errors.trustedIpHeader, true)}
+              >
+                {/* Stored value invalid: force an explicit choice. */}
+                {!isTrustedIpHeader(header) && (
+                  <option value="" disabled>
+                    Pilih header…
+                  </option>
+                )}
+                {headerOptions.map((h) => (
+                  <option key={h} value={h}>
+                    {TRUSTED_IP_HEADER_LABELS[h]}
+                  </option>
+                ))}
+              </select>
+            </Field>
+            {pickedHeader === 'cf-connecting-ip' && (
+              <p role="alert" className="flex items-start gap-2 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+                <TriangleAlert className="mt-0.5 size-4 shrink-0 text-amber-600" />
+                <span className="min-w-0">
+                  <span className="font-semibold">Gunakan hanya bila server hanya menerima trafik dari Cloudflare;</span>{' '}
+                  jika tidak, IP bisa dipalsukan.
+                </span>
+              </p>
+            )}
+          </div>
+        </TabCard>
+
+        <TabCard
           id="sec-rate"
           title="Batas request publik"
-          description="Berlaku untuk pengunjung tanpa login, dihitung per alamat IP. IP yang terdaftar di Akses IP kantor dikecualikan; batas sekali isi per perangkat tetap berlaku."
+          description="Berlaku untuk pengunjung tanpa login, dihitung per alamat IP."
         >
           <div className="space-y-6">
             <fieldset className="min-w-0">
-              <legend className="text-sm font-semibold text-zinc-800">Kirim formulir (daftar hadir &amp; booking)</legend>
+              <legend className="text-sm font-semibold text-zinc-800">Kirim formulir booking</legend>
               <div className="mt-3 grid grid-cols-1 gap-5 sm:grid-cols-2 sm:gap-4">
                 <NumberField name="publicMutationRateMax" label="Maksimal kiriman" hint={range('publicMutationRateMax', 'Kiriman')} error={errors.publicMutationRateMax} defaultValue={text('publicMutationRateMax')} />
                 <NumberField name="publicMutationRateWindowMin" label="Jendela waktu" hint={range('publicMutationRateWindowMin', 'Menit')} error={errors.publicMutationRateWindowMin} defaultValue={text('publicMutationRateWindowMin')} />
               </div>
             </fieldset>
             <fieldset className="min-w-0">
-              <legend className="text-sm font-semibold text-zinc-800">Buka halaman publik (/hadir, logo)</legend>
+              <legend className="text-sm font-semibold text-zinc-800">Buka halaman publik (beranda, ruangan, logo)</legend>
               <div className="mt-3 grid grid-cols-1 gap-5 sm:grid-cols-2 sm:gap-4">
                 <NumberField name="publicPageRateMax" label="Maksimal request" hint={range('publicPageRateMax', 'Request')} error={errors.publicPageRateMax} defaultValue={text('publicPageRateMax')} />
                 <NumberField name="publicPageRateWindowMin" label="Jendela waktu" hint={range('publicPageRateWindowMin', 'Menit')} error={errors.publicPageRateWindowMin} defaultValue={text('publicPageRateWindowMin')} />
@@ -341,7 +236,7 @@ export function ProtectionSettingsForm({
         <TabCard
           id="sec-recaptcha"
           title="reCAPTCHA v3"
-          description="Verifikasi bot tanpa tantangan visual pada form daftar hadir, booking publik, dan login dashboard. Kunci dibuat di Google reCAPTCHA Admin Console (tipe v3)."
+          description="Verifikasi bot tanpa tantangan visual. Wajib untuk form booking publik; juga dipakai di login dashboard bila aktif. Kunci dibuat di Google reCAPTCHA Admin Console (tipe v3)."
         >
           <div className="space-y-5">
             <div>
@@ -359,7 +254,7 @@ export function ProtectionSettingsForm({
                 />
                 <span className="text-sm">
                   <span className="block font-medium text-zinc-800">Aktifkan reCAPTCHA</span>
-                  <span className="block text-xs text-zinc-500">Butuh site key dan secret key. Bila Google tidak bisa dihubungi, kiriman publik ditolak.</span>
+                  <span className="block text-xs text-zinc-500">Butuh site key dan secret key. Nonaktif = booking publik ditolak. Bila Google tidak bisa dihubungi, kiriman publik juga ditolak.</span>
                 </span>
               </label>
               {errors.recaptchaEnabled && (
@@ -454,7 +349,7 @@ function ClearSecretButton() {
   const onClick = async () => {
     const ok = await confirm({
       title: 'Hapus secret key?',
-      message: 'Secret key reCAPTCHA akan dihapus dan reCAPTCHA dinonaktifkan. Form publik tidak lagi terlindungi reCAPTCHA.',
+      message: 'Secret key reCAPTCHA akan dihapus dan reCAPTCHA dinonaktifkan. Booking publik akan ditolak sampai reCAPTCHA diaktifkan kembali.',
       confirmText: 'Ya, hapus',
       cancelText: 'Batal',
       tone: 'danger',

@@ -6,7 +6,7 @@ import { CopyAttendanceLink } from '@/app/_components/copy-attendance-link';
 import { primaryButton, secondaryButton, smallButton } from './ui';
 
 type Props = {
-  // Visible trigger text, e.g. "QR Booking" / "QR Daftar Hadir".
+  // Visible trigger text, e.g. "QR Booking".
   label: string;
   // Accessible name of the trigger when several are on one page.
   triggerAriaLabel?: string;

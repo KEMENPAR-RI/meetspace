@@ -1,6 +1,6 @@
 // In-memory fixed windows (single app instance); bounds guessing and scrypt load on the 1GB VPS.
 // Login buckets: per IP (loose: an office shares one IP), per username|IP (strict), and per username
-// across all IPs (10x strict, against distributed guessing; skipped for allowlisted office IPs).
+// across all IPs (10x strict, against distributed guessing; counts only wrong passwords, see recordFailedLogin).
 
 // Hard cap on tracked keys per bucket.
 const MAX_KEYS = 5000;
@@ -27,6 +27,12 @@ export class FixedWindow {
     entry.hits++;
     entry.max = max;
     return entry.hits <= max;
+  }
+
+  // Read-only: true when the next attempt would exceed `max`.
+  isLocked(key: string, max: number, nowMs: number): boolean {
+    const entry = this.entries.get(key);
+    return entry !== undefined && entry.resetAt > nowMs && entry.hits >= max;
   }
 
   reset(key: string): void {
@@ -76,19 +82,22 @@ export function resolveLoginIpKey(ipKey: string | null, nodeEnv: string | undefi
 }
 
 // Login: false when any bucket is full. `username` lowercase; `ipKey` from getClientIpKey (never a shared "unknown").
-// `office` = IP matched the active office allowlist: exempt from the global per-username bucket.
 export function consumeLoginAttempt(
   ipKey: string,
   username: string,
   limits: LoginLimits,
-  { office = false }: { office?: boolean } = {},
   nowMs: number = Date.now(),
 ): boolean {
   const windowMs = limits.windowMin * 60_000;
   if (!byIp.consume(ipKey, limits.ipMax, windowMs, nowMs)) return false;
   if (!byUserIp.consume(userIpKey(username, ipKey), limits.userMax, windowMs, nowMs)) return false;
-  if (office) return true;
-  return byUser.consume(username, limits.userMax * GLOBAL_USER_FACTOR, windowMs, nowMs);
+  // Global bucket is only checked here; it grows in recordFailedLogin (after reCAPTCHA + a wrong password).
+  return !byUser.isLocked(username, limits.userMax * GLOBAL_USER_FACTOR, nowMs);
+}
+
+// Wrong password (or unknown/inactive user) after the rate limits and reCAPTCHA passed.
+export function recordFailedLogin(username: string, limits: LoginLimits, nowMs: number = Date.now()): void {
+  byUser.consume(username, limits.userMax * GLOBAL_USER_FACTOR, limits.windowMin * 60_000, nowMs);
 }
 
 // Successful login clears only that username|IP bucket; the IP and global buckets keep counting.

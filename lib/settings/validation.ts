@@ -1,6 +1,5 @@
 import { z } from 'zod';
 
-import { parseAllowlist } from '@/lib/ip-allowlist';
 import { readCheckbox } from '@/lib/user/validation';
 
 import type { SettingsPatch } from './codec';
@@ -35,14 +34,8 @@ const tabSchemas = {
     loginIpRateMax: intField('Batas login per IP', L.loginIpRateMax),
     loginRateWindowMin: intField('Jendela waktu (menit)', L.loginRateWindowMin),
   }),
-  'ip-kantor': z.object({
-    trustedIpHeader: z.enum(TRUSTED_IP_HEADERS, 'Pilih header IP yang didukung.'),
-  }),
-  'daftar-hadir': z.object({
-    publicAttendanceMaxPerBooking: intField('Maksimal peserta per rapat', L.publicAttendanceMaxPerBooking),
-    attendanceDeviceCooldownMin: intField('Jeda isi ulang per perangkat (menit)', L.attendanceDeviceCooldownMin),
-  }),
   proteksi: z.object({
+    trustedIpHeader: z.enum(TRUSTED_IP_HEADERS, 'Pilih header IP yang didukung.'),
     publicMutationRateMax: intField('Batas kirim formulir per IP', L.publicMutationRateMax),
     publicMutationRateWindowMin: intField('Jendela waktu kirim formulir (menit)', L.publicMutationRateWindowMin),
     publicPageRateMax: intField('Batas buka halaman per IP', L.publicPageRateMax),
@@ -65,7 +58,7 @@ export type ParseSettingsTabResult =
   | { ok: true; patch: SettingsPatch }
   | { ok: false; fieldErrors: Partial<Record<SettingsField, string>>; values: SettingsValues };
 
-const CHECKBOX_FIELDS: ReadonlySet<SettingsField> = new Set(['officeIpCheck', 'recaptchaEnabled']);
+const CHECKBOX_FIELDS: ReadonlySet<SettingsField> = new Set(['recaptchaEnabled']);
 
 function readString(formData: FormData, key: string): string {
   const raw = formData.get(key);
@@ -80,28 +73,6 @@ export function readSettingsValues(tab: EditableSettingsTab, formData: FormData)
     values[field] = CHECKBOX_FIELDS.has(field) ? (readCheckbox(formData, field) ? '1' : '') : readString(formData, field);
   }
   return values;
-}
-
-// Entries separated by commas or new lines; each checked with the same parser the office check uses.
-// Returns the canonical comma-separated list, or the per-entry error message.
-export function normalizeAllowlist(raw: string): { ok: true; value: string } | { ok: false; message: string } {
-  if (raw.length > SETTINGS_LIMITS.officeAllowedIps) {
-    return { ok: false, message: `Daftar IP maksimal ${SETTINGS_LIMITS.officeAllowedIps} karakter.` };
-  }
-  const entries = raw
-    .split(/[\s,]+/)
-    .map((e) => e.trim())
-    .filter(Boolean);
-  const invalid = entries.filter((e) => parseAllowlist(e) === null);
-  if (invalid.length > 0) {
-    const shown = invalid.slice(0, 5).map((e) => `"${e.slice(0, 50)}"`).join(', ');
-    const more = invalid.length > 5 ? ` dan ${invalid.length - 5} lainnya` : '';
-    return {
-      ok: false,
-      message: `Entri tidak valid: ${shown}${more}. Gunakan IP atau CIDR (IPv4 minimal /16, IPv6 minimal /32).`,
-    };
-  }
-  return { ok: true, value: [...new Set(entries)].join(', ') };
 }
 
 // Tab form -> patch with only that tab's keys. Empty secret = keep the stored one (omitted from the patch).
@@ -121,15 +92,6 @@ export function parseSettingsTab(tab: EditableSettingsTab, formData: FormData): 
   }
 
   let patch: SettingsPatch = result.success ? { ...result.data } : {};
-
-  if (tab === 'ip-kantor') {
-    const officeIpCheck = values.officeIpCheck === '1';
-    const allowlist = normalizeAllowlist(values.officeAllowedIps ?? '');
-    if (!allowlist.ok) fieldErrors.officeAllowedIps = allowlist.message;
-    else if (officeIpCheck && allowlist.value === '') {
-      fieldErrors.officeAllowedIps = 'Isi minimal 1 IP/CIDR kantor saat cek jaringan kantor aktif.';
-    } else patch = { ...patch, officeIpCheck, officeAllowedIps: allowlist.value };
-  }
 
   if (tab === 'proteksi' && result.success) {
     const data = result.data as z.infer<(typeof tabSchemas)['proteksi']>;

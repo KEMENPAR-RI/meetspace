@@ -24,6 +24,7 @@ export function RoomGrid({ rooms }: { rooms: PublicRoom[] }) {
           {/* Whole card is the link */}
           <Link
             href={`/ruang/${room.id}`}
+            prefetch={false}
             className="group flex h-full flex-col rounded-2xl border border-zinc-200 border-t-4 border-t-secondary bg-white p-5 shadow-sm hover:border-primary/30 hover:shadow-md focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary motion-safe:transition"
           >
             <h3 className="text-lg leading-snug font-semibold break-words text-primary">{room.name}</h3>

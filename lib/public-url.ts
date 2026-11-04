@@ -29,9 +29,4 @@ export function roomBookingUrl(roomId: string): string | null {
   return publicUrl(`/ruang/${encodeURIComponent(roomId)}`);
 }
 
-// Per-room attendance page (QR on the door).
-export function attendanceUrl(roomId: string): string | null {
-  return publicUrl(`/hadir/${encodeURIComponent(roomId)}`);
-}
-
 export const PUBLIC_URL_MISSING = 'URL publik belum dikonfigurasi.';

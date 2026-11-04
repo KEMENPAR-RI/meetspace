@@ -41,7 +41,7 @@ export async function requireSuperadmin(): Promise<CurrentUser> {
   return user;
 }
 
-// Actions/route handlers: session only (dashboard is not office-IP gated); null = answer "Tidak diizinkan.".
+// Actions/route handlers: session only; null = answer "Tidak diizinkan.".
 export async function authorizeUser(): Promise<CurrentUser | null> {
   return getCurrentUser();
 }
@@ -61,20 +61,6 @@ export async function authorizeBooking(user: CurrentUser, bookingId: unknown): P
     select: { id: true, roomId: true, startsAt: true, endsAt: true },
   });
   return booking;
-}
-
-export type AuthorizedAttendance = { id: string; bookingId: string; roomId: string };
-
-export async function authorizeAttendance(
-  user: CurrentUser,
-  attendanceId: unknown,
-): Promise<AuthorizedAttendance | null> {
-  if (!isUuid(attendanceId)) return null;
-  const found = await prisma.attendance.findFirst({
-    where: { id: attendanceId, booking: roomScopeWhere(getRoomScope(user)) },
-    select: { id: true, bookingId: true, booking: { select: { roomId: true } } },
-  });
-  return found ? { id: found.id, bookingId: found.bookingId, roomId: found.booking.roomId } : null;
 }
 
 // Pages: session + booking in scope, else login / 404.

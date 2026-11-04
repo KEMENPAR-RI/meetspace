@@ -47,7 +47,7 @@ export function CopyAttendanceLink({ url }: { url: string | null }) {
         {status === 'copied' ? 'Tersalin' : 'Copy link'}
       </button>
       <p aria-live="polite" className="sr-only">
-        {status === 'copied' ? 'Link daftar hadir tersalin' : ''}
+        {status === 'copied' ? 'Link tersalin' : ''}
       </p>
       {status === 'manual' && (
         <div className="space-y-1">

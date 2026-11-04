@@ -39,6 +39,7 @@ export default function LoginPage() {
 
         <Link
           href="/"
+          prefetch={false}
           className="mt-5 inline-flex items-center gap-1 rounded text-sm text-white/80 hover:text-white hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-secondary"
         >
           <ArrowLeft className="size-4" />

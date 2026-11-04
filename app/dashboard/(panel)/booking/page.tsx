@@ -42,7 +42,7 @@ async function BookingContent({ searchParams }: { searchParams: SearchParams }) 
       <PageHeader
         eyebrow="Booking"
         title="Booking Mendatang"
-        description="Edit, pindah ruangan, atau batalkan booking. Daftar hadir dan QR ada di detail rapat."
+        description="Edit, pindah ruangan, atau batalkan booking."
         icon={<CalendarDays />}
         actions={<RoomFilter rooms={rooms} selected={roomId} action="/dashboard/booking" />}
       />

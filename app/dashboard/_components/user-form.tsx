@@ -74,7 +74,7 @@ export function UserForm({ action, mode, initial }: Props) {
         <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
           {(
             [
-              { value: 'ADMIN', label: 'Admin', hint: 'Kelola booking & daftar hadir ruangan yang ditugaskan.' },
+              { value: 'ADMIN', label: 'Admin', hint: 'Kelola booking ruangan yang ditugaskan.' },
               { value: 'SUPERADMIN', label: 'Superadmin', hint: 'Akses penuh, termasuk ruangan & akun.' },
             ] as const
           ).map((opt) => (

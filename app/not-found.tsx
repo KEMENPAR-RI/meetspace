@@ -21,6 +21,7 @@ export default function NotFound() {
       </p>
       <Link
         href="/"
+        prefetch={false}
         className="mt-8 inline-flex h-10 items-center justify-center gap-1.5 rounded-lg bg-primary px-4 text-sm font-medium text-white hover:bg-primary/90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary motion-safe:transition-colors"
       >
         <House className="size-4" />

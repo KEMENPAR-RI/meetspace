@@ -7,6 +7,7 @@ import { authorizeUser, LOGIN_PATH } from '@/lib/auth/access';
 import {
   consumeLoginAttempt,
   consumePasswordChangeAttempt,
+  recordFailedLogin,
   resetPasswordChangeAttempts,
   resetUserLoginAttempts,
   resolveLoginIpKey,
@@ -14,7 +15,7 @@ import {
 import { DUMMY_HASH, hashPassword, needsRehash, PasswordHasherBusyError, verifyPassword } from '@/lib/auth/password';
 import { clearSession, createSession } from '@/lib/auth/session';
 import { PASSWORD_MAX, USERNAME_MAX, type FormState, type LoginState, type PasswordField } from '@/lib/auth/types';
-import { checkOfficeAccess, getClientIpKey } from '@/lib/office-access';
+import { getClientIpKey } from '@/lib/office-access';
 import { RECAPTCHA_FAILED_MESSAGE, verifyRecaptcha } from '@/lib/recaptcha';
 import { getAppSettings } from '@/lib/settings/queries';
 import { prisma } from '@/lib/prisma';
@@ -59,17 +60,15 @@ export async function login(_prevState: LoginState, formData: FormData): Promise
   const password = readText(formData, 'password');
   const fail = (message: string): LoginState => ({ status: 'error', message, values: { username } });
 
-  // No office-IP gate: the dashboard must stay reachable (e.g. to fix the office IP settings).
   // Without a client IP there is no fair bucket: refuse instead of sharing one.
   const ipKey = resolveLoginIpKey(await getClientIpKey(h));
   if (!ipKey) {
     logMissingIp();
     return fail(UNKNOWN_IP_MESSAGE);
   }
-  // Rate limits before any scrypt work; allowlisted office IPs skip the global per-username bucket.
+  // Rate limits before any scrypt work.
   const settings = await getAppSettings();
-  const office = settings.officeIpCheck && (await checkOfficeAccess(h)).allowed;
-  if (!consumeLoginAttempt(ipKey, username, toLimits(settings), { office })) return fail(RATE_LIMIT_MESSAGE);
+  if (!consumeLoginAttempt(ipKey, username, toLimits(settings))) return fail(RATE_LIMIT_MESSAGE);
 
   // reCAPTCHA v3 (FormData `recaptchaToken`, action 'login') runs after the rate limits and before any scrypt work.
   // Only an 'unavailable' verifier (Google down, bad keys) lets the attempt through, so a misconfigured key can never
@@ -95,6 +94,7 @@ export async function login(_prevState: LoginState, formData: FormData): Promise
   }
 
   if (!ok || !user || !user.isActive) {
+    recordFailedLogin(username, toLimits(settings));
     await sleep(FAILED_LOGIN_DELAY_MS);
     return fail(LOGIN_FAILED_MESSAGE);
   }

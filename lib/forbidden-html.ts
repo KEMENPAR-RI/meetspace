@@ -44,14 +44,6 @@ ${body}
 </html>`;
 }
 
-export const FORBIDDEN_HTML: string = statusPage(
-  'Akses Ditolak',
-  `<p class="code">403 · Akses ditolak</p>
-<h1>Akses hanya dari jaringan kantor</h1>
-<p>Halaman Booking Rapat hanya dapat dibuka dari jaringan internal kantor.</p>
-<p class="hint">Sambungkan perangkat Anda ke WiFi kantor, lalu muat ulang halaman ini. Jika masih ditolak, hubungi tim ${MAINTAINER}.</p>`,
-);
-
 // 429 for public GET pages over the per-IP limit.
 export const TOO_MANY_HTML: string = statusPage(
   'Terlalu Banyak Permintaan',

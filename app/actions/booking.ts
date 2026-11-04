@@ -8,10 +8,10 @@ import { findOverlap, lockRoomForWrite, type OverlappingSlot } from '@/lib/booki
 import { formatTimeRange, getBookingStatus } from '@/lib/booking/time';
 import type { BookingFormState, CancelBookingResult } from '@/lib/booking/types';
 import { parseBookingInput, readBookingValues, type BookingValues } from '@/lib/booking/validation';
-import { checkOfficeAccess, getClientIpKey, isOfficeIp } from '@/lib/office-access';
+import { getClientIpKey } from '@/lib/office-access';
 import { prisma } from '@/lib/prisma';
 import { consumePublicMutationQuota, rateLimitMessage } from '@/lib/rate-limit';
-import { RECAPTCHA_FAILED_MESSAGE, verifyRecaptcha } from '@/lib/recaptcha';
+import { RECAPTCHA_FAILED_MESSAGE, RECAPTCHA_NOT_CONFIGURED_MESSAGE, verifyRecaptcha } from '@/lib/recaptcha';
 import { ROOM_TX_OPTIONS } from '@/lib/room/lock';
 import { isUuid } from '@/lib/uuid';
 
@@ -19,9 +19,9 @@ const ROOM_UNAVAILABLE = 'Ruangan tidak tersedia.';
 
 type TxOutcome = { kind: 'ok' } | { kind: 'clash'; slot: OverlappingSlot } | { kind: 'room' } | { kind: 'gone' };
 
-// Public (office network). `roomId` is bound on the server page; treat it as unknown at runtime.
-// FormData `recaptchaToken` (reCAPTCHA v3, action 'booking') when enabled. Per-IP limit unless the IP is on the
-// office allowlist or the request has a valid session.
+// Public (internet). `roomId` is bound on the server page; treat it as unknown at runtime.
+// Requires FormData `recaptchaToken` (reCAPTCHA v3, action 'booking'); rejected while reCAPTCHA is off.
+// Per-IP limit unless the request has a valid session.
 export async function createBooking(
   roomId: string,
   _prevState: BookingFormState,
@@ -29,17 +29,18 @@ export async function createBooking(
 ): Promise<BookingFormState> {
   const values = readBookingValues(formData);
   const h = await headers();
-  if (!(await checkOfficeAccess(h)).allowed) return { status: 'error', message: 'Tidak diizinkan.', values };
   if (!isUuid(roomId)) return { status: 'error', message: ROOM_UNAVAILABLE, values };
 
-  if (!(await getCurrentUser()) && !(await isOfficeIp(h))) {
+  if (!(await getCurrentUser())) {
     const ipKey = await getClientIpKey(h);
     if (!ipKey) return { status: 'error', message: 'Tidak diizinkan.', values };
     const quota = await consumePublicMutationQuota(ipKey, new Date());
     if (!quota.ok) return { status: 'error', message: rateLimitMessage(quota.retryAfterMin), values };
   }
-  if (!(await verifyRecaptcha(formData.get('recaptchaToken'), 'booking')).ok) {
-    return { status: 'error', message: RECAPTCHA_FAILED_MESSAGE, values };
+  const captcha = await verifyRecaptcha(formData.get('recaptchaToken'), 'booking', { required: true });
+  if (!captcha.ok) {
+    const message = captcha.reason === 'not-configured' ? RECAPTCHA_NOT_CONFIGURED_MESSAGE : RECAPTCHA_FAILED_MESSAGE;
+    return { status: 'error', message, values };
   }
 
   const parsed = parseBookingInput(formData);

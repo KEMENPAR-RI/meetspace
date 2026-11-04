@@ -66,8 +66,8 @@ APP_URL="https://rapat.example.go.id"
 NEXT_PUBLIC_APP_MAINTAINER="BIRODATIN - APJAR"
 ```
 
-- `APP_URL`: alamat publik (domain di bagian 4), tanpa path. Dipakai untuk QR dan link. Kosong = QR nonaktif. Skema (`http://` atau `https://`) juga menentukan flag `Secure` pada cookie login bila reverse proxy tidak mengirim `X-Forwarded-Proto`. Dengan `https://`, aplikasi wajib diakses lewat HTTPS; dengan `http://`, cookie dikirim tanpa `Secure` (kurang aman, hanya untuk intranet).
-- Batas login, cek IP kantor, header IP, dan maks peserta tidak lagi di `.env`. Semua diatur superadmin di `/dashboard/pengaturan` (disimpan di DB). Default: login 10x/username dan 50x/IP per 15 menit, cek IP kantor nonaktif, header `x-real-ip`, maks 200 peserta.
+- `APP_URL`: alamat publik (domain di bagian 4), tanpa path. Dipakai untuk QR, link, dan pengecekan hostname reCAPTCHA (harus sama persis dengan domain yang dibuka user, termasuk `www.`). Kosong = QR nonaktif. Skema (`http://` atau `https://`) juga menentukan flag `Secure` pada cookie login bila reverse proxy tidak mengirim `X-Forwarded-Proto`. Dengan `https://`, aplikasi wajib diakses lewat HTTPS; dengan `http://`, cookie dikirim tanpa `Secure` (kurang aman, hanya untuk intranet).
+- Batas login, header IP, batas request publik, dan reCAPTCHA tidak di `.env`. Semua diatur superadmin di `/dashboard/pengaturan` (disimpan di DB). Default: login 10x/username dan 50x/IP per 15 menit, header `x-real-ip`, halaman publik 300 request/IP per 5 menit, kirim booking 5x/IP per 10 menit, reCAPTCHA nonaktif (booking publik ditolak sampai reCAPTCHA diaktifkan).
 - `NEXT_PUBLIC_APP_MAINTAINER`: nama pengelola di halaman error. Nilainya tertanam saat build: setelah diubah wajib `docker compose build` ulang (restart saja tidak cukup). Kosong = `BIRODATIN - APJAR`.
 - `DB_HOST` biarkan saja, Docker mengisinya `127.0.0.1`.
 - `COMPOSE_FILE` dan `DOCKER_DB_HOST` tidak dipakai lagi. Kalau ada di `.env`, hapus.
@@ -88,10 +88,10 @@ Cek hasilnya:
 ```sh
 docker compose ps                                  # tunggu sampai (healthy), kira-kira 1 menit
 docker compose run --rm migrate migrate status     # harus "Database schema is up to date!"
-curl -I http://127.0.0.1:8282/                     # 403 = normal kalau cek IP kantor aktif
+curl -sI -H 'X-Real-IP: 127.0.0.1' http://127.0.0.1:8282/ | head -1   # 200; tanpa header X-Real-IP = 429 (normal)
 ```
 
-`(healthy)` dan `403` hanya berarti aplikasi sudah listen, bukan berarti DB tersambung. Koneksi DB dicek lewat `migrate status` di atas. Hasil migration ada di output terminal (container `migrate` langsung dihapus).
+`(healthy)` dan `200` hanya berarti aplikasi sudah listen, bukan berarti DB tersambung. Koneksi DB dicek lewat `migrate status` di atas. Hasil migration ada di output terminal (container `migrate` langsung dihapus).
 
 Buat akun superadmin (interaktif: username, nama, password diketik tersembunyi). Perintah yang sama dipakai untuk reset password superadmin:
 
@@ -125,11 +125,53 @@ location / {
 sudo nginx -t && sudo nginx -s reload
 ```
 
-Baris `X-Real-IP` wajib ada. Aplikasi membaca IP pengunjung dari situ (header default di `/dashboard/pengaturan`) untuk cek IP kantor dan batas login. Kalau header salah, semua percobaan login dihitung satu IP, sehingga satu orang bisa membuat semua admin terkunci.
+Baris `X-Real-IP` wajib ada. Aplikasi membaca IP pengunjung dari situ (header default di `/dashboard/pengaturan?tab=proteksi`, bagian "Alamat IP klien") untuk batas login, batas request halaman publik, dan batas kirim booking. Kalau header tidak terkirim, semua pengunjung halaman publik kena 429 dan login ditolak. Kalau header berisi IP yang sama untuk semua orang, semua dihitung satu IP: pengunjung cepat kena 429 dan satu orang bisa membuat semua admin terkunci.
 
 Baris `CF-Connecting-IP ""` membuang header palsu dari klien. Header IP `cf-connecting-ip` di Pengaturan hanya boleh dipakai bila origin dikunci ke IP Cloudflare (firewall/aaPanel hanya menerima IP Cloudflare); kalau tidak, siapa pun bisa memalsukan IP.
 
 HTTPS wajib: dashboard dan login bisa diakses dari internet, dan cookie sesi hanya dikirim lewat HTTPS. Pasang SSL di aaPanel (Website > domain > SSL > Let's Encrypt) dan aktifkan Force HTTPS.
+
+### Batas request di nginx (disarankan)
+
+Halaman `/` dan `/ruang/...` terbuka ke internet. Aplikasi sudah membatasi request per IP, tapi `limit_req` di nginx menahan banjir request lebih awal (tanpa menyentuh Node/DB). Batas nginx dibuat lebih longgar dari batas aplikasi, jadi pengunjung normal tetap melihat halaman 429 dari aplikasi.
+
+Zona di level `http`. aaPanel meng-include `/www/server/panel/vhost/nginx/*.conf` di blok `http`, jadi cukup buat file sendiri (tidak tertimpa saat edit site):
+
+```sh
+sudo tee /www/server/panel/vhost/nginx/0.booking-rapat-limit.conf > /dev/null <<'EOF'
+# Halaman publik: beranda + /ruang/<id>
+map $uri $br_page_key {
+    ~^/$                $binary_remote_addr;
+    ~^/ruang/[^/]+$     $binary_remote_addr;
+    default             "";
+}
+# POST: server action createBooking (/ruang/...) + login
+map "$request_method:$uri" $br_post_key {
+    ~^POST:/ruang/              $binary_remote_addr;
+    ~^POST:/dashboard/login$    $binary_remote_addr;
+    default                     "";
+}
+limit_req_zone $br_page_key zone=br_page:1m rate=2r/s;
+limit_req_zone $br_post_key zone=br_post:1m rate=10r/m;
+limit_req_status 429;
+EOF
+```
+
+Lalu di `location /` site (bagian 4), tambah dua baris di atas `proxy_pass`:
+
+```nginx
+    limit_req zone=br_page burst=60 nodelay;
+    limit_req zone=br_post burst=10 nodelay;
+```
+
+```sh
+sudo nginx -t && sudo nginx -s reload
+```
+
+- Key kosong (`""`) tidak dihitung, jadi aset `/_next/...`, dashboard, dan API tidak kena batas ini.
+- `1m` cukup untuk ±16 ribu IP (hemat RAM).
+- Banyak pengguna di balik satu IP kantor (NAT) dan sering kena 429: naikkan `burst`/`rate`.
+- Di belakang Cloudflare, `$binary_remote_addr` adalah IP Cloudflare: pasang `real_ip_header CF-Connecting-IP` + `set_real_ip_from` (daftar IP Cloudflare) dulu, kalau tidak semua pengunjung berbagi satu batas.
 
 ## 5. Update aplikasi
 
@@ -154,12 +196,12 @@ sed -i '/^COMPOSE_FILE=/d; /^DOCKER_DB_HOST=/d' .env
 Rollback ke versi sebelumnya (hanya kode; skema DB tidak ikut mundur, lihat Rollback database di bagian 7):
 
 ```sh
-docker images booking-rapat                        # lihat tag yang tersedia
+docker images meetspace                            # lihat tag yang tersedia
 sed -i 's/^APP_TAG=.*/APP_TAG=TAG_LAMA/' .env       # ganti TAG_LAMA
 docker compose up -d --no-build --no-deps app
 ```
 
-Hapus image lama yang tidak dipakai lagi: `docker rmi booking-rapat:TAG booking-rapat-migrate:TAG`.
+Hapus image lama yang tidak dipakai lagi: `docker rmi meetspace:TAG meetspace-migrate:TAG`.
 
 ### Upgrade ke versi multi-ruangan (sekali, dari versi `ADMIN_PASSWORD`)
 
@@ -201,7 +243,7 @@ docker run --rm -it --network host -e DB_HOST=127.0.0.1 \
 ```
 
 5) Login di `https://DOMAIN/dashboard/login` sebagai superadmin, lalu:
-- Pengaturan (`/dashboard/pengaturan`): aktifkan cek IP kantor dan isi daftar IP kantor bila perlu (dulu `OFFICE_IP_CHECK` / `OFFICE_ALLOWED_IPS`), pastikan header IP `x-real-ip`.
+- Pengaturan (`/dashboard/pengaturan`): pastikan header IP `x-real-ip`.
 - Akun > Akun baru: buat akun role Admin untuk tiap admin lama.
 - Ruangan > "Ruang Rapat": pilih admin penanggung jawab, simpan.
 - Bagikan username + password awal ke tiap admin; minta mereka ganti password di menu Password.
@@ -213,7 +255,7 @@ sed -i -E '/^(ADMIN_PASSWORD|ADMIN_SESSION_SECRET|OFFICE_IP_CHECK|OFFICE_ALLOWED
 rm ~/backup/env-sebelum-multiruangan
 ```
 
-Rollback upgrade ini (urut, jangan kembalikan `.env` sebelum `down.sql` jalan karena file-nya ada di image migrate versi baru). Akun, ruangan, sesi, pengaturan, dan kolom jenis kelamin hilang; booking dan daftar hadir tetap ada:
+Rollback upgrade ini (urut, jangan kembalikan `.env` sebelum `down.sql` jalan karena file-nya ada di image migrate versi baru). Akun, ruangan, sesi, dan pengaturan hilang; booking tetap ada. Kalau migration yang lebih baru sudah diterapkan, jalankan `down.sql`-nya dulu (urutan terbalik, bagian 7):
 
 ```sh
 docker compose stop app
@@ -233,7 +275,7 @@ docker compose up -d --no-build --no-deps app
 
 ### Upgrade proteksi publik (migration `20261104000000_public_protection`)
 
-Menambah tabel `attendance_device_locks`, batas request publik, dan reCAPTCHA v3 (diatur di Pengaturan, bukan `.env`).
+Menambah batas request publik dan reCAPTCHA v3 (diatur di Pengaturan, bukan `.env`).
 
 ```sh
 grep -q '^NEXT_PUBLIC_APP_MAINTAINER=' .env || { sed -i '$a\' .env && echo 'NEXT_PUBLIC_APP_MAINTAINER="BIRODATIN - APJAR"' >> .env; }
@@ -245,17 +287,90 @@ docker compose run --rm migrate migrate status     # harus "Database schema is u
 ```
 
 Setelah deploy, login superadmin > `/dashboard/pengaturan?tab=proteksi`:
-- Tab `ip-kantor`: pastikan daftar IP kantor benar. IP di daftar itu tidak kena batas request per IP (kunci per perangkat tetap berlaku).
 - reCAPTCHA: buat key v3 di https://www.google.com/recaptcha/admin (domain = domain publik), isi Site key + Secret key, lalu aktifkan. Secret hanya bisa diganti/dihapus, tidak ditampilkan lagi.
-- Tab `daftar-hadir`: atur jeda per perangkat (default 30 menit).
 
-Rollback migration ini saja:
+Rollback migration ini saja (hanya bila migration `20261105000000_remove_attendance` belum diterapkan; kalau sudah, rollback rilis itu dulu, lihat subbagian berikut):
 
 ```sh
 docker compose stop app
 docker compose run --rm migrate db execute --file prisma/migrations/20261104000000_public_protection/down.sql
 sed -i 's/^APP_TAG=.*/APP_TAG=TAG_LAMA/' .env       # ganti TAG_LAMA
 docker compose up -d --no-build --no-deps app
+```
+
+### Upgrade hapus daftar hadir + akses IP kantor (migration `20261105000000_remove_attendance` + `20261106000000_remove_office_ip`)
+
+Isi rilis:
+- Fitur daftar hadir dihapus. Tabel `attendances`, `attendance_device_locks`, dan kolom `bookings.attendance_token` di-drop: **data peserta (nama, satker, no. HP, tanda tangan) hilang permanen**. Halaman `/hadir/...` dan `/rapat/...` hilang, **QR daftar hadir yang sudah ditempel di pintu ruangan jadi mati** (cabut/ganti; QR Booking tetap jalan). Arsip xlsx dari `/dashboard/log` tidak lagi punya sheet "Daftar Hadir".
+- Filter akses IP kantor dihapus (tab `ip-kantor` hilang, baris `office_ip_check`/`office_allowed_ips` dihapus dari `app_settings`). Halaman `/` dan `/ruang/[id]` kini terbuka ke internet, dibatasi request per IP.
+- **reCAPTCHA wajib untuk booking publik**: tanpa Site key + Secret key yang aktif, semua booking publik ditolak.
+- Setting header IP (`trustedIpHeader`) pindah ke tab Proteksi publik.
+
+1) Backup DB (wajib, sebelum deploy):
+
+```sh
+mkdir -p ~/backup && chmod 700 ~/backup
+/www/server/mysql/bin/mysqldump -u booking -p --single-transaction --routines --triggers booking_rapat \
+  > ~/backup/booking_rapat-sebelum-hapus-hadir-$(date +%F-%H%M).sql
+ls -lh ~/backup/                                   # pastikan file tidak 0 byte
+grep -c 'INSERT INTO `attendances`' ~/backup/booking_rapat-sebelum-hapus-hadir-*.sql   # > 0 bila ada data peserta
+docker images meetspace                            # catat tag yang sedang jalan (TAG_LAMA) untuk rollback
+grep '^APP_TAG=' .env
+```
+
+2) Ekspor arsip daftar hadir (wajib, **masih di versi lama**, sebelum `git pull`): login superadmin > `https://DOMAIN/dashboard/log` > pilih periode > ekspor xlsx. Ulangi per periode (mis. per tahun) sampai semua data tercakup; kalau ekspor ditolak karena terlalu banyak baris, perkecil periode. Buka file, pastikan sheet "Daftar Hadir" berisi data, simpan di luar server.
+
+3) Aktifkan reCAPTCHA (sebelum deploy, atau tepat setelahnya; di versi lama sudah tersedia): `/dashboard/pengaturan?tab=proteksi` > reCAPTCHA v3 > isi Site key + Secret key (key dari https://www.google.com/recaptcha/admin, domain = domain publik) > centang aktif > simpan. Tes satu booking dari HP (bukan jaringan kantor).
+
+   Pastikan `APP_URL` = domain publik yang benar-benar dibuka user. Versi baru menolak token reCAPTCHA yang hostname-nya tidak sama dengan host `APP_URL` (booking publik, dan login saat reCAPTCHA aktif). Contoh gagal: `www.` vs tanpa `www.`, atau domain lama.
+   - Dashboard > Ruangan > pilih ruangan > QR Booking: link yang tampil harus diawali `https://DOMAIN_PUBLIK/` (link ini dibuat dari `APP_URL`).
+   - Kalau domain lain/`www.` masih terpasang di site aaPanel, arahkan ke domain utama: Website > domain > Redirect (301) ke `https://DOMAIN_PUBLIK`.
+   - Kalau beda: ubah `APP_URL` di `.env` (bagian 2), lalu `docker compose up -d --no-build --no-deps app`.
+
+4) Pastikan header IP benar. Salah header = semua pengunjung kena 429 (atau semua dihitung satu IP):
+
+```sh
+sudo grep -rn 'X-Real-IP' /www/server/panel/vhost/nginx/      # harus ada: proxy_set_header X-Real-IP $remote_addr;
+```
+
+Di `/dashboard/pengaturan?tab=proteksi` > Alamat IP klien > Header IP tepercaya = `x-real-ip` (sesuai bagian 4). `cf-connecting-ip` hanya bila origin dikunci ke IP Cloudflare.
+
+5) Build, migrate, start:
+
+```sh
+git pull
+export APP_TAG=$(git rev-parse HEAD | cut -c1-7)
+docker compose build && docker compose run --rm migrate && docker compose up -d \
+  && sed -i -e '/^APP_TAG=/d' -e '$a\' .env && echo "APP_TAG=$APP_TAG" >> .env
+docker image prune -f
+```
+
+6) Cek hasil:
+
+```sh
+docker compose ps                                  # tunggu (healthy)
+docker compose run --rm migrate migrate status     # harus "Database schema is up to date!"
+/www/server/mysql/bin/mysql -u booking -p booking_rapat -e "
+  SELECT migration_name, finished_at FROM _prisma_migrations ORDER BY migration_name DESC LIMIT 2;
+  SHOW TABLES LIKE 'attendance%';
+  SHOW COLUMNS FROM bookings LIKE 'attendance_token';
+  SELECT \`key\` FROM app_settings WHERE \`key\` IN ('office_ip_check','office_allowed_ips','public_attendance_max_per_booking','attendance_device_cooldown_min');"
+for i in 1 2 3; do curl -s -o /dev/null -w '%{http_code}\n' https://DOMAIN/; done   # harus 200, bukan 429
+docker compose exec app printenv APP_URL           # harus https://DOMAIN_PUBLIK (tanpa path)
+# setelah tes booking + login dari HP: harus kosong
+docker compose logs --since 30m app | grep "reason: 'hostname'"
+```
+
+Hasil query yang benar: dua migration teratas `20261106000000_remove_office_ip` dan `20261105000000_remove_attendance` dengan `finished_at` terisi; `SHOW TABLES` hanya `attendance_rate_limits` (tetap dipakai batas booking publik); dua query terakhir kosong. Lalu tes booking dari HP sekali lagi. Pasang juga `limit_req` nginx (bagian 4) bila belum.
+
+7) Rollback: pulihkan dari dump. `down.sql` kedua migration hanya membuat ulang struktur kosong (data peserta dan daftar IP kantor tidak kembali), jadi jangan dipakai untuk memulihkan data. Booking yang dibuat setelah upgrade ikut hilang:
+
+```sh
+docker compose stop app
+/www/server/mysql/bin/mysql -u booking -p booking_rapat < ~/backup/booking_rapat-sebelum-hapus-hadir-TANGGAL.sql
+sed -i 's/^APP_TAG=.*/APP_TAG=TAG_LAMA/' .env       # ganti TAG_LAMA (dari langkah 1)
+docker compose up -d --no-build --no-deps app
+docker compose run --rm migrate migrate status     # image migrate lama: harus up to date
 ```
 
 ## 6. Kalau ada masalah
@@ -267,6 +382,9 @@ docker compose up -d --no-build --no-deps app
 | `Access denied for user` | Password salah atau user belum dibuat | Cek `DB_PASSWORD`, ulangi bagian Database + user |
 | Build gagal / killed / out of memory | RAM kurang | Pasang swap (bagian 2) |
 | Login: `Tidak dapat memverifikasi alamat jaringan.` | Aplikasi production diakses tanpa reverse proxy yang mengirim header IP terpercaya | Akses lewat domain nginx (bagian 4), cek `X-Real-IP` dan header IP di Pengaturan |
+| Booking publik: `Booking online belum dapat digunakan: verifikasi keamanan (reCAPTCHA) belum diaktifkan admin.` | reCAPTCHA belum diisi/diaktifkan | Isi Site key + Secret key dan aktifkan di `/dashboard/pengaturan?tab=proteksi` |
+| Booking/login: `Verifikasi keamanan gagal, muat ulang halaman dan coba lagi.`; log app `[recaptcha] rejected` dengan `reason: 'hostname'` | Domain yang dibuka user beda dengan host `APP_URL` (mis. `www.`, domain lama) | Samakan `APP_URL` dengan domain publik, redirect domain lain ke situ (lihat langkah 3 upgrade hapus daftar hadir) |
+| Semua pengunjung `/` dapat "Terlalu banyak permintaan" (429) | Header IP tidak terkirim / salah pilih di Pengaturan, atau `limit_req` nginx terlalu ketat | Cek `X-Real-IP` di nginx (bagian 4) dan Header IP tepercaya di tab Proteksi publik; longgarkan `burst`/`rate` |
 | Container tidak `(healthy)` | Aplikasi gagal start (`(healthy)` tidak mengecek DB) | `docker compose logs app`, cocokkan dengan baris di atas |
 
 ## 7. Perintah berguna
@@ -288,10 +406,12 @@ Break-glass: matikan reCAPTCHA lewat DB bila tidak bisa login (key salah, Google
 docker compose restart app      # atau tunggu ±30 detik (cache pengaturan)
 ```
 
+Selama reCAPTCHA nonaktif, booking publik ditolak. Perbaiki key dan aktifkan lagi secepatnya.
+
 Rollback database: jalankan `down.sql` dari migration terbaru mundur ke yang ingin dibatalkan (urutan terbalik). Contoh batalkan migration terakhir saja:
 
 ```sh
-docker compose run --rm migrate db execute --file prisma/migrations/20261104000000_public_protection/down.sql
+docker compose run --rm migrate db execute --file prisma/migrations/20261106000000_remove_office_ip/down.sql
 ```
 
 Rollback penuh, urutan terbalik. **Awas: semua tabel dan data booking terhapus.**
@@ -305,4 +425,6 @@ done
 ## Catatan keamanan
 
 - Jangan commit atau bagikan `.env`.
-- Pertimbangkan `limit_req` (pembatas jumlah request) di nginx untuk `/dashboard/login`.
+- Tidak ada lagi filter IP kantor: `/` dan `/ruang/[id]` terbuka ke internet, termasuk nama pemesan, satker, dan agenda yang tampil di sana.
+- reCAPTCHA wajib aktif; tanpa itu booking publik mati.
+- Pasang `limit_req` nginx (bagian 4, "Batas request di nginx") untuk halaman publik, POST `/ruang/` (createBooking), dan `/dashboard/login`, sebagai lapisan sebelum aplikasi.

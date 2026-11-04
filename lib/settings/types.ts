@@ -4,11 +4,7 @@ export type SettingsField =
   | 'loginRateMax'
   | 'loginIpRateMax'
   | 'loginRateWindowMin'
-  | 'officeIpCheck'
-  | 'officeAllowedIps'
   | 'trustedIpHeader'
-  | 'publicAttendanceMaxPerBooking'
-  | 'attendanceDeviceCooldownMin'
   | 'publicMutationRateMax'
   | 'publicMutationRateWindowMin'
   | 'publicPageRateMax'
@@ -19,23 +15,20 @@ export type SettingsField =
   | 'recaptchaMinScore';
 
 // Settings page tabs (?tab=). 'tampilan' is saved by updateAppearance, the rest by updateSettingsTab.
-export const SETTINGS_TABS = ['tampilan', 'login', 'ip-kantor', 'daftar-hadir', 'proteksi'] as const;
+export const SETTINGS_TABS = ['tampilan', 'login', 'proteksi'] as const;
 export type SettingsTab = (typeof SETTINGS_TABS)[number];
 
 export const SETTINGS_TAB_LABELS: Record<SettingsTab, string> = {
   tampilan: 'Tampilan',
   login: 'Keamanan login',
-  'ip-kantor': 'Akses IP kantor',
-  'daftar-hadir': 'Daftar hadir publik',
   proteksi: 'Proteksi publik',
 };
 
 // Fields each tab saves; a tab never writes another tab's keys.
 export const SETTINGS_TAB_FIELDS = {
   login: ['loginRateMax', 'loginIpRateMax', 'loginRateWindowMin'],
-  'ip-kantor': ['officeIpCheck', 'officeAllowedIps', 'trustedIpHeader'],
-  'daftar-hadir': ['publicAttendanceMaxPerBooking', 'attendanceDeviceCooldownMin'],
   proteksi: [
+    'trustedIpHeader',
     'publicMutationRateMax',
     'publicMutationRateWindowMin',
     'publicPageRateMax',
@@ -58,15 +51,11 @@ export const SETTINGS_LIMITS = {
   loginRateMax: { min: 1, max: 1000 },
   loginIpRateMax: { min: 1, max: 1000 },
   loginRateWindowMin: { min: 1, max: 1440 },
-  publicAttendanceMaxPerBooking: { min: 1, max: 5000 },
-  attendanceDeviceCooldownMin: { min: 1, max: 1440 },
   publicMutationRateMax: { min: 1, max: 1000 },
   publicMutationRateWindowMin: { min: 1, max: 1440 },
   publicPageRateMax: { min: 1, max: 10000 },
   publicPageRateWindowMin: { min: 1, max: 1440 },
   recaptchaMinScore: { min: 0, max: 1 },
-  // Max characters of the allowlist text; matches the textarea maxLength.
-  officeAllowedIps: 5000,
 } as const;
 
 // Headers a reverse proxy may set with the client IP; the rightmost entry is used.
@@ -91,11 +80,7 @@ export const DEFAULT_APP_SETTINGS = {
   loginRateMax: 10,
   loginIpRateMax: 50,
   loginRateWindowMin: 15,
-  officeIpCheck: false,
-  officeAllowedIps: '',
   trustedIpHeader: 'x-real-ip',
-  publicAttendanceMaxPerBooking: 200,
-  attendanceDeviceCooldownMin: 30,
   publicMutationRateMax: 5,
   publicMutationRateWindowMin: 10,
   publicPageRateMax: 300,
@@ -109,13 +94,8 @@ export type AppSettings = {
   loginRateMax: number;
   loginIpRateMax: number;
   loginRateWindowMin: number;
-  officeIpCheck: boolean;
-  // Comma-separated IPs/CIDRs (v4/v6).
-  officeAllowedIps: string;
-  // '' = stored value is not an allowed header (office check fails closed).
+  // '' = stored value is not an allowed header (no client IP: per-IP limits refuse anonymous requests).
   trustedIpHeader: TrustedIpHeader | '';
-  publicAttendanceMaxPerBooking: number;
-  attendanceDeviceCooldownMin: number;
   publicMutationRateMax: number;
   publicMutationRateWindowMin: number;
   publicPageRateMax: number;

@@ -9,21 +9,17 @@ datasource db {
 
 // CHECK constraint and the booking_locks seed row live in the init migration SQL.
 model Booking {
-  id              String   @id @default(uuid()) @db.Char(36)
-  startsAt        DateTime @map("starts_at") @db.DateTime(6)
-  endsAt          DateTime @map("ends_at") @db.DateTime(6)
-  bookerName      String   @map("booker_name") @db.VarChar(100)
+  id         String   @id @default(uuid()) @db.Char(36)
+  startsAt   DateTime @map("starts_at") @db.DateTime(6)
+  endsAt     DateTime @map("ends_at") @db.DateTime(6)
+  bookerName String   @map("booker_name") @db.VarChar(100)
   // Column keeps its legacy name; labelled "Satker/Instansi" in the app.
-  satker          String   @map("division") @db.VarChar(100)
-  agenda          String   @db.VarChar(1000)
-  createdAt       DateTime @default(now()) @map("created_at") @db.DateTime(6)
-  // ascii_bin collation lives in the migration SQL.
-  // Unused since attendance moved per room (/hadir/<roomId>); drop in a later contract migration.
-  attendanceToken String?  @unique @map("attendance_token") @db.Char(32)
-  roomId          String   @map("room_id") @db.Char(36)
+  satker     String   @map("division") @db.VarChar(100)
+  agenda     String   @db.VarChar(1000)
+  createdAt  DateTime @default(now()) @map("created_at") @db.DateTime(6)
+  roomId     String   @map("room_id") @db.Char(36)
 
-  room        Room         @relation(fields: [roomId], references: [id], onDelete: Restrict)
-  attendances Attendance[]
+  room Room @relation(fields: [roomId], references: [id], onDelete: Restrict)
 
   // Per-room schedule/overlap lookups; also backs the room_id FK.
   @@index([roomId, startsAt])
@@ -32,29 +28,7 @@ model Booking {
   @@map("bookings")
 }
 
-// nameKey = lowercased normalized name, set by the app; its utf8mb4_bin collation (not expressible in Prisma) lives in the migration SQL.
-model Attendance {
-  id        String   @id @default(uuid()) @db.Char(36)
-  bookingId String   @map("booking_id") @db.Char(36)
-  name      String   @map("attendee_name") @db.VarChar(100)
-  nameKey   String   @map("name_key") @db.VarChar(150)
-  satker    String   @map("division") @db.VarChar(100)
-  // role/phone use ascii_bin collation in the migration SQL; phone is normalized to 628xxx by the app.
-  role      String?  @map("attendee_role") @db.VarChar(20)
-  phone     String?  @db.VarChar(16)
-  // Nullable for legacy rows; required on new submits by the app.
-  gender    Gender?
-  signature String   @db.VarChar(100)
-  signedAt  DateTime @default(now()) @map("signed_at") @db.DateTime(6)
-
-  booking Booking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
-
-  @@unique([bookingId, nameKey])
-  @@unique([bookingId, phone])
-  @@map("attendances")
-}
-
-// Fixed-window hit counter for public attendance submits; ip_key collation (ascii_bin) lives in the migration SQL.
+// Fixed-window hit counter for public booking submits (legacy table name); ip_key collation (ascii_bin) lives in the migration SQL.
 model AttendanceRateLimit {
   ipKey       String   @map("ip_key") @db.VarChar(40)
   windowStart DateTime @map("window_start") @db.DateTime(0)
@@ -63,20 +37,6 @@ model AttendanceRateLimit {
   @@id([ipKey, windowStart])
   @@index([windowStart])
   @@map("attendance_rate_limits")
-}
-
-// Last public attendance submit per device (sha256 of the br_device cookie); device_key collation (ascii_bin) lives in the migration SQL.
-model AttendanceDeviceLock {
-  deviceKey    String   @id @map("device_key") @db.Char(64)
-  lastSubmitAt DateTime @map("last_submit_at") @db.DateTime(3)
-
-  @@index([lastSubmitAt])
-  @@map("attendance_device_locks")
-}
-
-enum Gender {
-  L
-  P
 }
 
 enum UserRole {
