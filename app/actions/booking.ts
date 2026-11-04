@@ -4,6 +4,7 @@ import { refresh } from 'next/cache';
 import { headers } from 'next/headers';
 
 import { authorizeBooking, authorizeUser, canAccessRoom, getCurrentUser } from '@/lib/auth/access';
+import { resolveLoginIpKey } from '@/lib/auth/login-rate-limit';
 import { findOverlap, lockRoomForWrite, type OverlappingSlot } from '@/lib/booking/queries';
 import { formatTimeRange, getBookingStatus } from '@/lib/booking/time';
 import type { BookingFormState, CancelBookingResult } from '@/lib/booking/types';
@@ -16,6 +17,7 @@ import { ROOM_TX_OPTIONS } from '@/lib/room/lock';
 import { isUuid } from '@/lib/uuid';
 
 const ROOM_UNAVAILABLE = 'Ruangan tidak tersedia.';
+const UNKNOWN_IP_MESSAGE = 'Tidak dapat memverifikasi alamat jaringan. Hubungi admin.';
 
 type TxOutcome = { kind: 'ok' } | { kind: 'clash'; slot: OverlappingSlot } | { kind: 'room' } | { kind: 'gone' };
 
@@ -32,8 +34,12 @@ export async function createBooking(
   if (!isUuid(roomId)) return { status: 'error', message: ROOM_UNAVAILABLE, values };
 
   if (!(await getCurrentUser())) {
-    const ipKey = await getClientIpKey(h);
-    if (!ipKey) return { status: 'error', message: 'Tidak diizinkan.', values };
+    // Same rule as login/proxy: no client IP -> refused in production, "dev-local" key in `next dev`.
+    const ipKey = resolveLoginIpKey(await getClientIpKey(h));
+    if (!ipKey) {
+      console.error('[createBooking] client IP header missing or invalid (check trusted IP header setting)');
+      return { status: 'error', message: UNKNOWN_IP_MESSAGE, values };
+    }
     const quota = await consumePublicMutationQuota(ipKey, new Date());
     if (!quota.ok) return { status: 'error', message: rateLimitMessage(quota.retryAfterMin), values };
   }
